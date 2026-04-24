@@ -1,6 +1,6 @@
 module github.com/RatesEngine/rates-engine
 
-go 1.25.0
+go 1.25.9
 
 // Direct production dependencies.
 //

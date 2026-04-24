@@ -156,6 +156,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Spectral lint
-        uses: stoplightio/spectral-action@v0.8
+        uses: stoplightio/spectral-action@v0.8.13
         with:
           file_glob: openapi/*.yaml
