@@ -232,4 +232,3 @@ func TestTopicConstantsMatchEncoderOutput(t *testing.T) {
 		}
 	}
 }
-

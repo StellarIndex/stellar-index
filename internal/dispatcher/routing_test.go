@@ -162,6 +162,7 @@ func (m *mismatch) Error() string { return m.what }
 func missing(name string, got any) error {
 	return &mismatch{what: name + "=" + fmtAny(got)}
 }
+
 func fmtAny(v any) string {
 	if s, ok := v.(string); ok {
 		return "\"" + s + "\""

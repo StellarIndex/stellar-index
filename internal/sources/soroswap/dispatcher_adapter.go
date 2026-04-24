@@ -49,7 +49,7 @@ type Decoder struct {
 	// Counters surfaced for test assertions. Production wiring
 	// maps them to obs.SourceOrphanEventsTotal /
 	// SourceDecodeErrorsTotal in PR 165d.
-	evictedOrphans    int
+	evictedOrphans     int
 	skippedUnknownPair int
 }
 
