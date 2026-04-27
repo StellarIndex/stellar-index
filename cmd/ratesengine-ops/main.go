@@ -2053,48 +2053,54 @@ func wasmHistory(args []string) error { //nolint:funlen,gocognit,gocyclo // line
 // in lcm and updates state when a watched contract's instance
 // executable hash changes (or first appears).
 //
-// Both pre-V3 (no Soroban) and post-V3 transaction metas are
-// handled — pre-V3 contributes nothing because contracts didn't
-// exist, but the function returns silently rather than erroring
-// so it can scan a full backfill range without per-protocol gating.
+// Performance note: every value access on the SDK XDR types is a
+// deep copy (LedgerCloseMetaV1 includes TxProcessing[] — potentially
+// thousands of bytes per ledger). At this hot path we use pointer
+// access exclusively — `lcm.V1`, `entry.Data.ContractData`,
+// `cd.Val.Instance` — to avoid per-ledger XDR copies. An earlier
+// implementation using GetV1() / GetContractData() / GetInstance()
+// burned ~6 minutes of 99% CPU on a 100k-ledger sample.
 func scanLCMForWasmChanges(
 	lcm sdkxdr.LedgerCloseMeta,
 	watch map[sdkxdr.Hash]string,
 	state map[sdkxdr.Hash]*wasmContractState,
 	seq uint32,
 ) {
-	v1, ok := lcm.GetV1()
-	if !ok {
+	if lcm.V != 1 || lcm.V1 == nil {
 		return // pre-V1 LCM (very old ledgers); no Soroban; nothing to scan
 	}
+	v1 := lcm.V1
 	for i := range v1.TxProcessing {
-		txMeta := v1.TxProcessing[i].TxApplyProcessing
-		var ops []sdkxdr.LedgerEntryChanges
+		txMeta := &v1.TxProcessing[i].TxApplyProcessing
 		switch {
 		case txMeta.V3 != nil:
-			for _, op := range txMeta.V3.Operations {
-				ops = append(ops, op.Changes)
+			for j := range txMeta.V3.Operations {
+				changes := txMeta.V3.Operations[j].Changes
+				for k := range changes {
+					scanLedgerEntryChange(&changes[k], watch, state, seq)
+				}
 			}
 		case txMeta.V4 != nil:
-			for _, op := range txMeta.V4.Operations {
-				ops = append(ops, op.Changes)
+			for j := range txMeta.V4.Operations {
+				changes := txMeta.V4.Operations[j].Changes
+				for k := range changes {
+					scanLedgerEntryChange(&changes[k], watch, state, seq)
+				}
 			}
 		default:
 			// V1/V2 didn't have ContractData. Skip.
 			continue
-		}
-		for _, changes := range ops {
-			for _, change := range changes {
-				scanLedgerEntryChange(change, watch, state, seq)
-			}
 		}
 	}
 }
 
 // scanLedgerEntryChange checks one LedgerEntryChange for a
 // watched-contract instance update. Updates state in place.
+//
+// Takes the change by pointer to avoid copying the (potentially
+// deep) LedgerEntry tree on every call.
 func scanLedgerEntryChange(
-	change sdkxdr.LedgerEntryChange,
+	change *sdkxdr.LedgerEntryChange,
 	watch map[sdkxdr.Hash]string,
 	state map[sdkxdr.Hash]*wasmContractState,
 	seq uint32,
@@ -2116,8 +2122,13 @@ func scanLedgerEntryChange(
 		return
 	}
 
-	cd, ok := entry.Data.GetContractData()
-	if !ok {
+	// Type discriminator first — most LedgerEntries are Account /
+	// Trustline / Offer / etc., not ContractData. Cheap reject path.
+	if entry.Data.Type != sdkxdr.LedgerEntryTypeContractData {
+		return
+	}
+	cd := entry.Data.ContractData
+	if cd == nil {
 		return
 	}
 
@@ -2127,7 +2138,7 @@ func scanLedgerEntryChange(
 		return
 	}
 
-	// Match against our watch list. ContractId is *Hash on the
+	// Match against our watch list. ContractId is *ContractId on the
 	// ScAddress union when Type == ScAddressTypeScAddressTypeContract.
 	if cd.Contract.Type != sdkxdr.ScAddressTypeScAddressTypeContract {
 		return
@@ -2144,8 +2155,8 @@ func scanLedgerEntryChange(
 	if cd.Val.Type != sdkxdr.ScValTypeScvContractInstance {
 		return
 	}
-	inst, ok := cd.Val.GetInstance()
-	if !ok {
+	inst := cd.Val.Instance
+	if inst == nil {
 		return
 	}
 	if inst.Executable.Type != sdkxdr.ContractExecutableTypeContractExecutableWasm {

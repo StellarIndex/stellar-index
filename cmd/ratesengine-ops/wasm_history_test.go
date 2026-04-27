@@ -78,7 +78,7 @@ func TestScanLedgerEntryChange_IgnoresUnrelatedContract(t *testing.T) {
 	state := map[sdkxdr.Hash]*wasmContractState{}
 
 	change := makeUpdateChange(t, other, [32]byte{1, 2, 3})
-	scanLedgerEntryChange(change, watch, state, 100)
+	scanLedgerEntryChange(&change, watch, state, 100)
 
 	if len(state) != 0 {
 		t.Errorf("state populated for unwatched contract: %v", state)
@@ -96,7 +96,7 @@ func TestScanLedgerEntryChange_CapturesWatchedUpgrade(t *testing.T) {
 
 	wasmHash := [32]byte{0xDE, 0xAD, 0xBE, 0xEF}
 	change := makeUpdateChange(t, watched, wasmHash)
-	scanLedgerEntryChange(change, watch, state, 12345)
+	scanLedgerEntryChange(&change, watch, state, 12345)
 
 	if len(state) != 1 {
 		t.Fatalf("state has %d entries, want 1", len(state))
