@@ -60,7 +60,7 @@ import (
 	"github.com/RatesEngine/rates-engine/internal/version"
 )
 
-func main() { //nolint:gocyclo // subcommand switch; each case is trivial, splitting adds indirection without clarity
+func main() { //nolint:gocyclo,gocognit // subcommand switch; each case is trivial, splitting adds indirection without clarity
 	args := os.Args[1:]
 	if len(args) == 0 {
 		printUsage()
