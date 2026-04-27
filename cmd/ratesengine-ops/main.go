@@ -117,6 +117,11 @@ func main() { //nolint:gocyclo,gocognit // subcommand switch; each case is trivi
 			fmt.Fprintf(os.Stderr, "wasm-history: %v\n", err)
 			os.Exit(1)
 		}
+	case "cross-region-check":
+		if err := crossRegionCheck(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "cross-region-check: %v\n", err)
+			os.Exit(1)
+		}
 	case "version", "--version", "-v":
 		fmt.Println(version.String())
 	case "help", "--help", "-h":
@@ -190,6 +195,23 @@ Subcommands:
                                        -archivist-timeout (default 30m).
                             all        run all four.
                           Exit 0 = clean; 1 = first break with details.
+  cross-region-check -regions name=URL,name=URL,... [-pairs PAIR,...] [-metric vwap|twap|ohlc] [-window DUR] [-samples N] [-to TS]
+                          Hit each region's /v1/{vwap|twap|ohlc} endpoint
+                          for the same closed-bucket window and assert
+                          byte-equality on the price field (and OHLC
+                          open/high/low/close where applicable). Per
+                          ADR-0015 the response should be byte-identical
+                          across regions once trades have replicated;
+                          divergence here flags one of: replication lag,
+                          decoder version drift, upstream divergence,
+                          or postgres replication broken. Designed for
+                          periodic execution from a monitoring host.
+                          Exit 0 = clean; 1 = divergence with diff.
+                          Example:
+                            ratesengine-ops cross-region-check \
+                              -regions r1=https://r1.api.example.net,r2=https://r2.api.example.net \
+                              -pairs native/fiat:USD,crypto:BTC/fiat:USD \
+                              -metric vwap -samples 5
   wasm-history -config PATH -contracts ID,ID,... [-from N] [-to N] [-bucket NAME]
                           Walk a galexie bucket and emit a per-contract
                           WASM-version timeline. For each watched contract,
