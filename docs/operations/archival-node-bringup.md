@@ -351,6 +351,129 @@ write twice, all skip already-complete work. Keep going.
 
 ---
 
+## Per-region variations (R2 AWS / R3 Vultr) — per ADR-0016
+
+The recipe above is the **R1 (Hetzner Frankfurt)** path: full local
+mirror of every dataset. For the other two regions the storage shape
+differs (per [ADR-0016](../adr/0016-per-region-storage-strategy.md))
+and several recipe steps change or drop.
+
+### R2 — AWS us-east-1 (galexie-direct-from-public-bucket)
+
+R2 reads galexie ledger-meta data **directly from
+`s3://aws-public-blockchain/v1.1/stellar/ledgers/pubnet/`**, no
+local mirror. The bucket is co-located in us-east-2 (Ohio); from a
+us-east-1 indexer the latency is ~5-15 ms per S3 GET, free egress
+(AWS Open Data Sponsorship).
+
+Differences from the recipe above:
+
+- **Step 2 (stellar-archivist mirror)** — *skip*. R2 doesn't keep a
+  local SDF history archive; it trusts R1's Tier B + E verification.
+- **Step 3 (sweep + heal)** — *skip*. Nothing local to sweep.
+- **Step 4 (galexie-archive-fill)** — *skip*. The indexer reads from
+  AWS public bucket directly via galexie's `datastore_config` block:
+
+  ```toml
+  [storage]
+  s3_endpoint        = "https://s3.us-east-2.amazonaws.com"
+  s3_bucket_archive  = "aws-public-blockchain"
+  s3_bucket_archive_prefix = "v1.1/stellar/ledgers/pubnet/"
+  s3_region          = "us-east-2"
+  ```
+
+  AWS public bucket access is anonymous — no `RATESENGINE_S3_*` creds
+  needed for the archive read path; galexie's S3 client falls back
+  to anonymous when no credentials are configured. (`galexie-live/`
+  for R2's own captive-core export still uses an authenticated
+  bucket in us-east-1.)
+- **Step 5 (verify-archive)** — runs `-tier chain,peers` (Tier A + D),
+  not `all`. Tier A confirms R2's local chain integrity (catches
+  bytes corrupted in transit from AWS). Tier D cross-validates against
+  ~6 tier-1 validator archives over HTTPS (catches a forked upstream).
+  No `/srv/history-archive` needed. Wall-clock ~30-45 min for
+  Tier A + D.
+- **Step 6 (indexer apply + start)** — same as R1 but
+  `ratesengine_live_seam_ledger` in inventory points at *R2's own
+  galexie-append start*, not R1's. Otherwise identical.
+
+R2 also runs the **Tier D weekly cron** (per
+`14-ratesengine-services.yml`) — same defence-in-depth as R1.
+
+End-to-end R2 bring-up: **~1–2 h** (compute + EBS provisioning +
+ansible apply + Tier A+D verify), vs ~10–13 h for R1. The
+short-circuit is "no local history-archive mirror, no local galexie-
+archive mirror".
+
+### R3 — Vultr Singapore (bare-metal + Vultr Object Storage hybrid)
+
+R3 keeps the bulk dataset (galexie-archive) on **Vultr Object Storage**
+(S3-compatible, region-local at ~5-10 ms latency, ~$25/mo for the
+4.76 TB), with postgres + galexie-live + OS on local NVMe.
+
+Differences from the recipe above:
+
+- **Step 2 (stellar-archivist mirror)** — *skip* (same as R2).
+- **Step 3 (sweep + heal)** — *skip*.
+- **Step 4 (galexie-archive-fill)** — runs, but writes to **Vultr
+  Object Storage** rather than local MinIO. The fill script reads
+  AWS public bucket and copies into Vultr's S3 endpoint. Procedure:
+
+  ```sh
+  # On r3 — set Vultr Object Storage endpoint as the destination
+  mc alias set vultr-objstor https://sgp1.vultrobjects.com $VULTR_S3_KEY $VULTR_S3_SECRET
+  mc alias set aws-public https://s3.us-east-2.amazonaws.com "" "" --api S3v4
+
+  # Use the same per-partition fill helper, just point at the
+  # Vultr alias as destination
+  PARTIALS="" galexie-archive-fill \
+    --dest vultr-objstor/galexie-archive \
+    --source aws-public/aws-public-blockchain/v1.1/stellar/ledgers/pubnet/
+  ```
+
+  (The current `galexie-archive-fill` script is hardcoded to
+  `local/galexie-archive` — making `--dest` configurable is a small
+  ansible role tweak; track as operator follow-up if R3 is being
+  brought up before that lands.)
+
+  Wall-clock: ~6-8 h (same bandwidth as R1's fill, plus Vultr's S3
+  endpoint write latency from the bare metal).
+- **Step 5 (verify-archive)** — `-tier chain,peers` (Tier A + D),
+  no `/srv/history-archive` needed. ~30-45 min.
+- **Step 6 (indexer apply + start)** — config points the indexer's
+  archive bucket at `vultr-objstor/galexie-archive` instead of the
+  local MinIO bucket. `ratesengine_live_seam_ledger` is R3's own
+  galexie-append start ledger.
+
+R3 captive-core for galexie-live runs locally on the bare metal NVMe
+(small footprint, ~7 GB). `galexie-live` writes go to either a small
+Vultr Object Storage bucket (cheap) or a local MinIO single-node
+on the bare metal's NVMe (faster, easier).
+
+End-to-end R3 bring-up: **~7-9 h** (compute provisioning + ansible +
+S3 fill + verify), most of which is the AWS-public-bucket read
++ Vultr-Object-Storage write step.
+
+### Per-region trust + verification model
+
+Recapping per ADR-0016:
+
+- **R1** is the *integrity leader*. Runs all four tiers (A+B+D+E)
+  on a schedule (Tier B + E weekly, Tier A nightly, Tier D weekly).
+- **R2** runs Tier A + D locally (weekly via cron). Trusts R1 for
+  Tier B + E.
+- **R3** runs Tier A + D locally (weekly via cron). Trusts R1 for
+  Tier B + E.
+
+The **cross-region CAGG consistency monitor** (per ADR-0015's contract,
+implementation pending) is the strongest check — it samples
+`(pair, window, from_ts)` triples across all three regions and asserts
+the closed-bucket VWAP rows are byte-identical. Failures there are
+investigated immediately; the most likely cause is decoder-version
+drift across regions, not raw upstream data divergence.
+
+---
+
 ## What this doc deliberately doesn't cover
 
 - **Phase-3 validator activation** (running our own three

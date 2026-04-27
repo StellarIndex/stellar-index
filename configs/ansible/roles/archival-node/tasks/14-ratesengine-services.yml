@@ -115,3 +115,51 @@
     state: started
     enabled: true
     daemon_reload: true
+
+# ──── Aggregator service ──────────────────────────────────────────────
+# Reads Timescale `trades` rows + writes CAGG rollups (per-window VWAP/TWAP).
+# /v1/price closed-bucket serving (ADR-0015) depends on this populating
+# the CAGG tables — without aggregator running, the API falls back to
+# last-trade lookups which won't satisfy the cross-region consistency
+# property. See aggregation-plan.md for the pipeline.
+
+- name: Install ratesengine-aggregator systemd unit
+  ansible.builtin.template:
+    src: systemd/ratesengine-aggregator.service.j2
+    dest: /etc/systemd/system/ratesengine-aggregator.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart ratesengine-aggregator
+
+- name: Enable + start ratesengine-aggregator
+  ansible.builtin.systemd:
+    name: ratesengine-aggregator
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# ──── Tier D weekly cron (multi-peer fork-detection) ──────────────────
+# Per ADR-0016 §7.4: each region runs verify-archive Tier D weekly to
+# catch upstream divergence (R2 reads from aws-public-blockchain S3,
+# R3 from Vultr Object Storage; if either upstream's bytes hash to a
+# different chain than the network's signed reality, Tier D catches it).
+# Runs as root because it needs to read /etc/default/ratesengine-ops
+# for galexie-archive S3 creds. Output to journald (logger -t).
+
+- name: Install Tier D verify-archive weekly cron
+  ansible.builtin.cron:
+    name: ratesengine-verify-archive-tier-d
+    cron_file: ratesengine-verify-archive-tier-d
+    user: root
+    minute: "23"
+    hour: "4"
+    weekday: "0"   # Sunday morning
+    job: >-
+      bash -c 'set -a; source /etc/default/ratesengine-ops; set +a;
+      /usr/local/bin/ratesengine-ops verify-archive
+      -config /etc/ratesengine.toml
+      -tier peers
+      -peer-samples 50
+      -from 2 -to {{ ratesengine_live_seam_ledger | default(0) | int - 1 }}
+      2>&1 | logger -t ratesengine-tier-d'
