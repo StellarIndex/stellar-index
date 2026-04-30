@@ -15,6 +15,19 @@ against.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`supply-cross-check-divergence` runbook cross-links sibling
+  supply alerts (#327)**: the runbook only referenced
+  `aggregator-silent.md` and `internal/supply/crosscheck.go` under
+  Related, missing four cross-references that an operator
+  triaging a divergence routinely needs: the supply-pipeline
+  architecture overview, both supply-refresh runbooks (the
+  goroutine-path equivalents that show whether the refresher
+  itself is healthy), and `supply-snapshot-stale.md` (sibling
+  on the timer path). Pure documentation change — single-file
+  edit + `last_verified` bump.
+
 ### Added
 
 - **`docs/architecture/supply-pipeline.md` (#318)**: architecture-
