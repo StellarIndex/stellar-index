@@ -15,6 +15,20 @@ against.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cursor-stuck` runbook upstream is Galexie + MinIO, not
+  stellar-rpc (#328)**: the runbook's Mitigation step 1
+  instructed on-call to *"fix the upstream (stellar-rpc)
+  first"* — but stellar-rpc was removed from r1 on 2026-04-23
+  and the indexer reads ledger metadata from Galexie's MinIO
+  output via `go-stellar-sdk/ingest.ApplyLedgerMetadata`. An
+  operator following the old instruction would chase a
+  non-running service. Mitigation step now points at Galexie /
+  MinIO checks, with a short footnote acknowledging the legacy
+  RPC path. Related section distinguishes the active
+  `all-ingestion-down` and legacy `rpc-lag` upstream paths.
+
 ### Added
 
 - **`docs/architecture/supply-pipeline.md` (#318)**: architecture-
