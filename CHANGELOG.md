@@ -15,6 +15,19 @@ against.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Supply-refresh runbooks acknowledge `asset_key` label
+  (#320)**: PR #314 added the `asset_key` dimension to
+  `ratesengine_aggregator_supply_refresh_total`, but the
+  `supply-refresh-error-dominant.md` runbook still claimed
+  *"Logs carry asset key; metric doesn't"* — operators following
+  the runbook would skip a useful per-asset diagnosis path and go
+  straight to journald. Both supply-refresh runbooks now show how
+  to split by `asset_key` from `/metrics` (and the equivalent
+  PromQL for dashboards) to distinguish a fleet-wide failure from
+  a single-asset bootstrap or config drift.
+
 ### Added
 
 - **`docs/architecture/supply-pipeline.md` (#318)**: architecture-
