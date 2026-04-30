@@ -15,6 +15,23 @@ against.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stellar runbooks acknowledge inert metrics (#321)**: four
+  `deploy/monitoring/rules/stellar.yml` alerts (`core-lag`,
+  `core-peers`, `rpc-lag`, `archive-publish`) reference metrics
+  produced by stellar-core / stellar-rpc / the core-prometheus-
+  exporter — all three were removed from r1 on 2026-04-23 per
+  [r1-deployment-state.md](docs/operations/r1-deployment-state.md).
+  The runbooks read as if the daemons were running, which would
+  send an on-call operator down a dead-end if a misconfigured
+  scrape ever triggered the alert. Each runbook now opens with a
+  *Deployment posture* callout stating the alert is currently
+  inert on r1, why it remains in the rule file (Phase-3 validator
+  rollout per ADR-0004), and that any actual page is a Prometheus
+  misconfiguration rather than upstream lag. Pure documentation
+  change; alert rules untouched.
+
 ### Added
 
 - **`docs/architecture/supply-pipeline.md` (#318)**: architecture-
