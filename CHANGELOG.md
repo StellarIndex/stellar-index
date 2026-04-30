@@ -15,6 +15,26 @@ against.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two more supply-snapshot runbooks acknowledge the
+  aggregator-resident path (#326)**: companion to #325. Both
+  `supply-snapshot-circulating-zero.md` and
+  `supply-snapshot-unit-failed.md` track metrics emitted
+  exclusively by the systemd-timer path
+  (`ratesengine_supply_snapshot_circulating_xlm` from
+  `internal/supply/textfile.go`;
+  `ratesengine_supply_snapshot_unit_failed` from the systemd-unit
+  wrapper), so on a goroutine-only deployment these alerts
+  silently never fire — a worse failure mode than the noisy
+  false-positive in #325. Each now carries a *Coverage caveat*
+  callout naming the two-path architecture, the missing-metric
+  consequence, and the goroutine-path equivalent signal:
+  - circulating-zero → recommends an API-layer probe of
+    `/v1/assets/native`;
+  - unit-failed → points at `supply-refresh-error-dominant.md`.
+  Pure documentation change.
+
 ### Added
 
 - **`docs/architecture/supply-pipeline.md` (#318)**: architecture-
