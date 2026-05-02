@@ -17,6 +17,23 @@ against.
 
 ### Fixed
 
+- **`pkg/client/doc.go` — accurate auth + coverage** — the
+  package-level godoc that ships to pkg.go.dev had two stale
+  sections: the "Authentication" SEP-10 bullet still said
+  "pending; will be added when the server's SEP-10 verifier ships
+  (Phase 5)" — but the verifier ships at
+  `/v1/auth/sep10/{challenge,token}` (PR landed weeks ago) and
+  the SDK accepts SEP-10 JWTs verbatim via Options.APIKey today.
+  And the "Roadmap" section claimed "PR A (this PR) ships the
+  skeleton" — language that's been stale since the skeleton
+  landed. Replaced both: SEP-10 bullet documents the live
+  challenge → sign → verify flow + that `Authorization: Bearer`
+  carries either `rek_*` keys or SEP-10 JWTs; the new "Coverage"
+  section enumerates the eight methods on main today, the seven
+  queued in PRs #446–#450, and the four surfaces deliberately
+  not-in-SDK (SSE / VWAP-TWAP-derivable / SEP-40 oracle /
+  operator endpoints).
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
