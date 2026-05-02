@@ -15,6 +15,26 @@ against.
 
 ## [Unreleased]
 
+### Added
+
+- **Status-page scaffold + `sev-status-page-update` runbook** —
+  `status.ratesengine.net` was committed to in the proposal §IDR
+  and required by Freighter F3.5 / F3.6, but nothing in `deploy/`
+  pointed at the page or specified what an update should look
+  like. New `deploy/status-page/cstate/` ships the cstate
+  (Hugo-based) site config, the public component list (12
+  customer-facing service surfaces matching the API + ingest +
+  backend layers), and the per-incident front-matter template.
+  New `docs/operations/runbooks/sev-status-page-update.md`
+  binds the update cadence (hourly during SEV-1, daily during
+  SEV-2 — matches the SEV-playbook + Freighter SLA), the
+  safe-to-publish detail level, and the workstation-down
+  fallback path. `docs/operations/sev-playbook.md` §5.1 now
+  references both rather than dangling a TBD. Hosting target
+  (Cloudflare Pages recommended) + DNS cutover remain operator
+  work — see [`deploy/status-page/README.md`](../deploy/status-page/README.md).
+  Closes G4 in `docs/launch-task-list.md`.
+
 ### Fixed
 
 - **`/v1/account/me` now returns the credential's `label`** —
