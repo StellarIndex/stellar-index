@@ -1,7 +1,10 @@
 # Rates Engine
 
-**Status:** Pre-v1. Ingestion + storage + REST API shipped;
-aggregator + hardening in progress.
+**Status:** Pre-v1. Ingestion + storage + REST API + aggregator
+shipped (VWAP/TWAP, triangulation, anomaly response,
+multi-factor confidence, freeze policy, supply pipeline);
+production hardening in progress (status page, SEV-1/2 dry-run,
+operational SLA proof).
 **License:** Apache-2.0.
 **Tested against:** Stellar protocol 25.x.
 
