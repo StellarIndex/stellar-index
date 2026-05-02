@@ -100,10 +100,21 @@ long-form rationale; each becomes a numbered ADR.
 - ✅ REST API v1 serving `/healthz`, `/readyz`, `/version`,
   `/assets`, `/price`, `/history`, `/ohlc`, `/vwap`, `/twap`,
   `/markets`, `/oracle/latest` behind CORS + per-IP rate limit.
-- ⏳ Aggregation engine (VWAP/TWAP cache refresh, cross-source
-  divergence detection).
-- ⏳ Historical backfill hardening, supply/F2 completion,
-  archive-completeness expansion, and launch controls.
+- ✅ Aggregation engine: VWAP/TWAP orchestrator with closed-bucket
+  Redis cache, cross-pair triangulation (X2.5 forex-snap), Phase 1+2
+  anomaly response, multi-factor confidence score, freeze policy.
+- ✅ Cross-source divergence detection (CoinGecko on by default,
+  Chainlink HTTP cross-check opt-in via FeedMap).
+- ✅ Three-algorithm supply pipeline (XLM via LCM AccountEntry
+  observer; classic via trustlines + claimable + LP + SAC observers;
+  SEP-41 via Soroban event observer) populating F2 fields on
+  `/v1/assets/{id}`.
+- ✅ Archive-completeness daemon (check / fix / verify modes) +
+  multi-tier archive verification (Tier A chain-link / Tier B
+  checkpoint / Tier D peer cross-compare / Tier E archivist).
+- ⏳ Production hardening: public status page (L4.11), SEV-1/2
+  dry-run record (L5.7), operational p95 ≤ 200ms proof
+  (L5.* + Wk 9–10 launch tasks).
 
 **Production deadline:** 2026-06-30 per
 [docs/discovery/delivery-plan.md](docs/discovery/delivery-plan.md).
