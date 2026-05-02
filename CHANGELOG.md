@@ -15,6 +15,26 @@ against.
 
 ## [Unreleased]
 
+### Added
+
+- **`/v1/price/stream` now serves closed-bucket events end-to-end**
+  — the handler returned 503 unconditionally because the API
+  binary never constructed a `streaming.Hub`, and no producer
+  ever called `Hub.Publish`. Closed: `cmd/ratesengine-api/main.go`
+  unconditionally constructs `streaming.NewHub(0)` and passes it
+  via `Options.Hub`; new `internal/api/streampublish` package
+  hosts a per-pair polling producer that watches the existing
+  `PriceReader` (same path `/v1/price` consumes) and fans out to
+  the Hub on every `ObservedAt` advance. Operators declare which
+  pairs broadcast via the new `[api.streaming]` config block:
+  `pairs = [["native","fiat:USD"], …]`. Empty `pairs` leaves the
+  producer disabled but still constructs the Hub so subscribers
+  connect cleanly (heartbeats only). New
+  `ratesengine_stream_publish_total{stream="price_stream"}`
+  counter signals fanout activity. The byte-identical-payload
+  property required by ADR-0015 is verified by
+  `TestPublisher_TwoSubscribersIdenticalPayload`.
+
 ### Fixed
 
 - **`/v1/account/me` now returns the credential's `label`** —
