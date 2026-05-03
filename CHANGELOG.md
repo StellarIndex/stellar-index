@@ -17,6 +17,17 @@ against.
 
 ### Fixed
 
+- **Four host-level runbooks are bare-metal-native** —
+  `host-cpu-high`, `host-memory-high`, `host-down`, `nvme-smart`
+  each had a single `kubectl` line that doesn't apply to our
+  fleet. Per-process / per-cgroup breakdown now uses
+  `systemd-cgtop` (it's already installed on every Ubuntu host
+  via systemd; no extra deps). Host-drain steps now route via
+  HAProxy admin (`disable server <pool>/<host>` on each LB)
+  instead of `kubectl cordon` — Patroni / Sentinel handle DB and
+  cache primary failover automatically. Continuation of the L6.5
+  doc-sweep (#460/#461/#462/#463).
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
