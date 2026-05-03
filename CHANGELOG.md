@@ -17,6 +17,23 @@ against.
 
 ### Fixed
 
+- **`MetadataConfig` doc no longer claims the on-chain
+  AccountEntry observer is "deferred"** — the type comment said
+  the static `[metadata.issuer_home_domains]` map was the
+  pragmatic middle ground "until that plumbing lands" (referring
+  to a deferred account-entry observer). Per Task #54 / #61 the
+  observer + LCM-derived resolver shipped:
+  `internal/sources/accounts` writes the
+  `account_observations` hypertable;
+  `internal/metadata.LCMHomeDomainResolver` reads from it; the
+  api binary chains them via `metadata.ChainedHomeDomainLookup`
+  with the static map as fallback. Doc + the field-level
+  `doc:` tag rewritten to describe the chained role accurately
+  (live resolver primary, static map fallback). Generated
+  `docs/reference/config/README.md` regenerated. Same drift
+  family as #494 (supply Future PRs that already shipped).
+  Continuation of the L6.5 doc-sweep.
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
