@@ -58,11 +58,27 @@ above.
 Runtime binaries / Debian packages:
 
 ```
-stellar-core      v26.0.1      (released 2026-04-13 per stellar-docs)
-stellar-rpc       v26.0.0+     (pinned per SHA 99a61f33)
 stellar-galexie   v26.0.0      (pinned per tag + SHA 6dec23e2)
+                                — embeds captive stellar-core internally;
+                                  the only stellar-core on r1 today.
 rs-stellar-archivist  (pre-tag; pin SHA a6a25033)
+                                — used by `verify-archive` for cross-anchor
+                                  checkpoint verification.
 ```
+
+Removed from r1 on 2026-04-23 (see
+`docs/operations/r1-deployment-state.md` §"Architecture after
+2026-04-23 trim"):
+
+- **stellar-core** as a standalone daemon — captive-core inside
+  Galexie now serves the same role; running both wasted RAM/CPU
+  without changing the data path. Re-add when validating
+  Phase-3 Tier-1 validator work (ADR-0004).
+- **stellar-rpc** — our indexer reads MinIO directly via
+  `go-stellar-sdk/ingest.ApplyLedgerMetadata`; the JSON-RPC
+  surface isn't on the data path. Source removed from r1; the
+  binary is retained only for the `ratesengine-ops rpc-probe`
+  operator diagnostic, which dials a remote public endpoint.
 
 Install-time tooling pinned by this repo snapshot:
 
