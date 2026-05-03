@@ -17,6 +17,15 @@ against.
 
 ### Fixed
 
+- **`coverage-matrix.md` Blend audit caveat closed** — Claim 5
+  said the Blend WASM audit Phase 2 was pending, keeping
+  `BackfillSafe=false` in `internal/sources/external/registry.go`.
+  The audit completed 2026-05-02 (11 contracts, 3 unique
+  WASMs, no mid-life upgrades; documented under
+  `docs/operations/wasm-audits/blend.md §"Phase 2 results"`)
+  and `BackfillSafe: true` is now set in registry.go. Updated
+  the Verified + Verdict bullets to reflect the closed
+  caveat.
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
