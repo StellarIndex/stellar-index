@@ -17,6 +17,18 @@ against.
 
 ### Fixed
 
+- **`repo-hygiene-plan.md` §15 IaC discipline now describes our
+  actual stack** — the section listed Kubernetes manifests in
+  `deploy/k8s/`, Helm charts, and "no inline shell heredocs in
+  manifests" as the IaC discipline, but ADR-0008 ratifies bare
+  metal + systemd + Ansible (no Kubernetes anywhere). Section
+  rewritten around `configs/ansible/roles/<name>/`, the actual
+  systemd units in `deploy/systemd/` (api / indexer / aggregator
+  + the four timer/oneshot pairs for archive-completeness,
+  sla-probe, supply-snapshot, verify-archive-tier-a), and
+  `deploy/docker-compose/` as the dev-only reference stack.
+  Continuation of the L6.5 doc-sweep.
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
