@@ -17,6 +17,20 @@ against.
 
 ### Fixed
 
+- **`internal/archivecompleteness/doc.go` PR-A/B/C sequencing
+  reflects shipped reality** — the godoc said `PR A (this
+  package as initially shipped)` provides cross-anchor scan,
+  `PR B will add native primary scanning + the fix mode`, and
+  `PR C wires the verify mode + systemd timer`. All three modes
+  ship today: `cmd/ratesengine-ops/main.go` switches on
+  `case "check"` / `"fix"` / `"verify"`, and
+  `deploy/systemd/archive-completeness.{service,timer}` ship the
+  timer. Doc rewritten to describe `# Modes (all shipped)` with
+  the actual fallback chain (SDF mainnet → AWS public-blockchain
+  → peers) and a pointer to the operational doc. Same drift
+  family as #477 / #483 / #490 / #494. Continuation of the L6.5
+  doc-sweep.
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
