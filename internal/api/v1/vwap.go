@@ -25,8 +25,9 @@ import (
 // Truncated is true when the window had MORE than the server's
 // max-trades cap (10000 today) — the returned Price is then only
 // over the chronologically-first 10000 trades and is NOT the true
-// window VWAP. Clients should narrow the window and retry, or
-// request the pre-computed rollup from the aggregator once it ships.
+// window VWAP. Clients should narrow the window and retry. For
+// fixed cross-region-consistent VWAPs, `/v1/price` serves the
+// closed-bucket aggregator output instead (per ADR-0015).
 type VWAPResult struct {
 	From             time.Time `json:"from"`
 	To               time.Time `json:"to"`
