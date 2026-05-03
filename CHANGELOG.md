@@ -17,6 +17,22 @@ against.
 
 ### Fixed
 
+- **`api-design.md` no longer reads as a Week-4-pending design
+  doc** — frontmatter said `status: draft — ratified at Week 4
+  design review` and the body had `**Ratification target:** end
+  of Week 4.` We're well past Week 4; the OpenAPI file ships as
+  the binding contract today and 32+ handlers are wired against
+  it. Frontmatter flipped to `ratified` with the right pointer
+  ("openapi/rates-engine.v1.yaml is the binding contract; this
+  doc records design intent"). §15 "Open questions (close by
+  Week 4)" rewritten as a closure list — GraphQL→L7.5,
+  SSE-not-WebSocket (shipped), proxy-not-rehost issuer images
+  (the metadata package does this), no Webhook callbacks, no
+  gRPC. Also fixed a stale `lint-docs.sh §11` citation in §16
+  (the OpenAPI ↔ handler invariant is §2). Same drift family as
+  #466 / #467 (Week-N frontmatter de-staling). Continuation of
+  the L6.5 doc-sweep.
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
