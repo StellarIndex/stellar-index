@@ -17,6 +17,18 @@ against.
 
 ### Fixed
 
+- **`ratesengine-ops supply snapshot -asset <non-native>` error
+  message no longer claims classic + SEP-41 computers are
+  unshipped.** The error said *"classic + SEP-41 follow once
+  their computers ship"*, contradicting both the docstring on
+  the same function (lines 38-44) AND `internal/supply/{classic,
+  sep41}.go` which actually ship them. Rewrote the error to say
+  what's actually true: those algorithms are served by the
+  aggregator-resident goroutine path (`[supply]
+  aggregator_refresh_enabled`), not this CLI subcommand.
+  Pointed at `docs/operations/supply-snapshot.md §"Asset-class
+  scope"` for the full split. Same fix on the `-asset` flag
+  help text in the function docstring.
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
