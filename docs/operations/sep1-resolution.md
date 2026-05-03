@@ -203,10 +203,11 @@ in `internal/config/load.go`, not hot-reloaded).
 
 ### Tracing a specific asset's resolution
 
-`ratesengine-ops sep1-trace -domain <home_domain>` (Phase 5
-deliverable; not yet implemented) would dump the full resolution
-path: DNS, IP, SSRF check result, HTTP status, parsed fields.
-For now the manual playbook is:
+A future `ratesengine-ops sep1-trace -domain <home_domain>`
+subcommand (not in `cmd/ratesengine-ops/main.go`'s switch today)
+would dump the full resolution path: DNS, IP, SSRF check
+result, HTTP status, parsed fields. Until it lands the manual
+playbook is:
 
 ```sh
 # 1. Confirm what the API sees
