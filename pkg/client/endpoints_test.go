@@ -2,8 +2,10 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -219,8 +221,237 @@ func TestMe_PathOnly(t *testing.T) {
 	}
 }
 
+// TestPriceTip_HappyPath — round-trip pinning: URL,
+// window_seconds query forwarding, decode of the rolling-window
+// VWAP shape (price_type="vwap").
+func TestPriceTip_HappyPath(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/price/tip" {
+			t.Errorf("path = %q, want /v1/price/tip", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("asset") != "native" {
+			t.Errorf("asset = %q", q.Get("asset"))
+		}
+		if q.Get("quote") != "fiat:USD" {
+			t.Errorf("quote = %q", q.Get("quote"))
+		}
+		if q.Get("window_seconds") != "10" {
+			t.Errorf("window_seconds = %q, want 10", q.Get("window_seconds"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {"asset_id":"native","quote":"fiat:USD","price":"0.07127","price_type":"vwap","observed_at":"2026-04-28T10:00:00Z","window_seconds":10},
+			"as_of": "2026-04-28T10:00:00Z",
+			"flags": {"stale": false, "single_source": false, "divergence_warning": false}
+		}`))
+	})
+	got, err := c.PriceTip(context.Background(), client.PriceTipQuery{
+		Asset: "native", Quote: "fiat:USD", WindowSeconds: 10,
+	})
+	if err != nil {
+		t.Fatalf("PriceTip: %v", err)
+	}
+	if got.Data.PriceType != "vwap" {
+		t.Errorf("PriceType = %q, want vwap", got.Data.PriceType)
+	}
+	if got.Data.WindowSeconds != 10 {
+		t.Errorf("WindowSeconds = %d, want 10", got.Data.WindowSeconds)
+	}
+	if got.Flags.Stale {
+		t.Error("Flags.Stale should be false on tip surface (ADR-0018)")
+	}
+}
+
+// TestPriceTip_LastTradeBranch — empty-window branch returns
+// last_trade with no window_seconds. Pinned because customers
+// distinguishing the two branches via PriceType is the surface's
+// main contract.
+func TestPriceTip_LastTradeBranch(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {"asset_id":"native","quote":"fiat:USD","price":"0.07","price_type":"last_trade","observed_at":"2026-04-28T09:55:30Z"},
+			"as_of": "2026-04-28T10:00:00Z",
+			"flags": {"stale": false}
+		}`))
+	})
+	got, err := c.PriceTip(context.Background(), client.PriceTipQuery{Asset: "native"})
+	if err != nil {
+		t.Fatalf("PriceTip: %v", err)
+	}
+	if got.Data.PriceType != "last_trade" {
+		t.Errorf("PriceType = %q, want last_trade", got.Data.PriceType)
+	}
+	// last_trade branch has no window_seconds — JSON omitempty
+	// elides the field entirely.
+	if got.Data.WindowSeconds != 0 {
+		t.Errorf("WindowSeconds = %d, want 0 on last_trade branch", got.Data.WindowSeconds)
+	}
+}
+
+// TestPriceTip_OmitsZeroWindowSeconds — the SDK MUST NOT send
+// `window_seconds=0` (the server treats 0 as "use default"; sending
+// it explicitly is wasted bandwidth). Pinned because a regression
+// that always sends the field would change the URL signature.
+func TestPriceTip_OmitsZeroWindowSeconds(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("window_seconds") {
+			t.Errorf("window_seconds sent on zero: %q", r.URL.Query().Get("window_seconds"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"asset_id":"native","quote":"fiat:USD","price":"0.07","price_type":"vwap","observed_at":"2026-04-28T10:00:00Z"},"as_of":"2026-04-28T10:00:00Z","flags":{}}`))
+	})
+	if _, err := c.PriceTip(context.Background(), client.PriceTipQuery{Asset: "native"}); err != nil {
+		t.Fatalf("PriceTip: %v", err)
+	}
+}
+
+// TestPriceTip_AssetRequired — empty Asset short-circuits.
+func TestPriceTip_AssetRequired(t *testing.T) {
+	c := client.New(client.Options{BaseURL: "http://nope.invalid"})
+	_, err := c.PriceTip(context.Background(), client.PriceTipQuery{})
+	if err == nil {
+		t.Fatal("expected error for empty Asset")
+	}
+	var apiErr *client.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != 400 {
+		t.Errorf("err = %v, want *APIError Status=400", err)
+	}
+}
+
+// TestPriceBatch_GETUnder100 — a 3-asset batch routes via GET
+// with the canonical comma-separated `asset_ids` param. Pinned
+// because the GET-vs-POST routing is the SDK's main value-add
+// over a hand-rolled curl.
+func TestPriceBatch_GETUnder100(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %q, want GET (≤100 ids should not POST)", r.Method)
+		}
+		if r.URL.Path != "/v1/price/batch" {
+			t.Errorf("path = %q, want /v1/price/batch", r.URL.Path)
+		}
+		ids := r.URL.Query().Get("asset_ids")
+		if ids != "native,crypto:BTC,credit:USDC-GA5Z" {
+			t.Errorf("asset_ids = %q, want comma-joined order-preserved", ids)
+		}
+		if q := r.URL.Query().Get("quote"); q != "fiat:USD" {
+			t.Errorf("quote = %q, want fiat:USD", q)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"asset_id":"native","quote":"fiat:USD","price":"0.07","price_type":"vwap","observed_at":"2026-04-28T10:00:00Z"},
+				{"asset_id":"crypto:BTC","quote":"fiat:USD","price":"96000.0","price_type":"vwap","observed_at":"2026-04-28T10:00:00Z"}
+			],
+			"as_of": "2026-04-28T10:00:00Z",
+			"flags": {"stale": false, "reduced_redundancy": false, "triangulated": false, "divergence_warning": false}
+		}`))
+	})
+	// 3 ids in, 2 out — the third silently omitted by the server
+	// (per the docstring's "missing observations are omitted").
+	got, err := c.PriceBatch(context.Background(), client.PriceBatchQuery{
+		AssetIDs: []string{"native", "crypto:BTC", "credit:USDC-GA5Z"},
+		Quote:    "fiat:USD",
+	})
+	if err != nil {
+		t.Fatalf("PriceBatch: %v", err)
+	}
+	if len(got.Data) != 2 {
+		t.Fatalf("len(Data) = %d, want 2 (server omits unknown)", len(got.Data))
+	}
+	if got.Data[0].AssetID != "native" {
+		t.Errorf("Data[0].AssetID = %q, want native", got.Data[0].AssetID)
+	}
+}
+
+// TestPriceBatch_POSTOver100 — a 150-asset batch routes via POST
+// with a JSON body (the GET form would blow past most reverse
+// proxies' 8 KiB header limit). Pinned because the threshold
+// crossing is the SDK's job, not the caller's.
+func TestPriceBatch_POSTOver100(t *testing.T) {
+	ids := make([]string, 150)
+	for i := range ids {
+		ids[i] = "credit:T" + strconv.Itoa(i) + "-G" + strings.Repeat("A", 56)
+	}
+	var sawMethod string
+	var sawAssetIDsLen int
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		sawMethod = r.Method
+		if r.URL.Path != "/v1/price/batch" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if r.URL.RawQuery != "" {
+			t.Errorf("query string non-empty on POST: %q", r.URL.RawQuery)
+		}
+		// Decode the body to verify the asset_ids round-tripped.
+		var body struct {
+			AssetIDs []string `json:"asset_ids"`
+			Quote    string   `json:"quote"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		sawAssetIDsLen = len(body.AssetIDs)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[],"as_of":"2026-04-28T10:00:00Z","flags":{}}`))
+	})
+	if _, err := c.PriceBatch(context.Background(), client.PriceBatchQuery{AssetIDs: ids}); err != nil {
+		t.Fatalf("PriceBatch: %v", err)
+	}
+	if sawMethod != http.MethodPost {
+		t.Errorf("method = %q, want POST (>100 ids must POST)", sawMethod)
+	}
+	if sawAssetIDsLen != 150 {
+		t.Errorf("body asset_ids len = %d, want 150", sawAssetIDsLen)
+	}
+}
+
+// TestPriceBatch_EmptyAssetIDs — empty batch short-circuits
+// client-side without a network call. Mirrors the
+// PriceQuery.Asset == "" check on the single-asset method.
+func TestPriceBatch_EmptyAssetIDs(t *testing.T) {
+	c := client.New(client.Options{BaseURL: "http://nope.invalid"})
+	_, err := c.PriceBatch(context.Background(), client.PriceBatchQuery{})
+	if err == nil {
+		t.Fatal("expected error for empty AssetIDs")
+	}
+	var apiErr *client.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %T, want *APIError", err)
+	}
+	if apiErr.Status != 400 {
+		t.Errorf("Status = %d, want 400", apiErr.Status)
+	}
+}
+
+// TestPriceBatch_OverPOSTCap — >1000 ids never round-trip; the
+// SDK rejects client-side. Splitting into chunks would mask the
+// envelope-wide flags.stale OR semantic on subsets the caller
+// wouldn't see — that's a caller decision, not the SDK's.
+func TestPriceBatch_OverPOSTCap(t *testing.T) {
+	ids := make([]string, 1001)
+	for i := range ids {
+		ids[i] = "x" + strconv.Itoa(i)
+	}
+	c := client.New(client.Options{BaseURL: "http://nope.invalid"})
+	_, err := c.PriceBatch(context.Background(), client.PriceBatchQuery{AssetIDs: ids})
+	if err == nil {
+		t.Fatal("expected error for >1000 ids")
+	}
+	var apiErr *client.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %T, want *APIError", err)
+	}
+	if apiErr.Status != 400 {
+		t.Errorf("Status = %d, want 400", apiErr.Status)
+	}
+}
+
 // TestOHLC_HappyPath — happy-path round-trip pinning required
 // query params + decode of OHLCBar shape with all four price
+// fields + the truncated flag.
 // fields + the truncated flag.
 func TestOHLC_HappyPath(t *testing.T) {
 	from := time.Date(2026, 4, 28, 9, 0, 0, 0, time.UTC)
@@ -354,6 +585,8 @@ func TestOHLC_TruncatedDecodes(t *testing.T) {
 		t.Errorf("TradeCount = %d, want 10000", got.Data.TradeCount)
 	}
 }
+
+
 
 // TestUsage_EmptyArrayDecodes — the placeholder usage endpoint
 // returns an empty array today; client should decode that without
