@@ -17,6 +17,17 @@ against.
 
 ### Fixed
 
+- **`aggregation-plan.md` API-surface table is internally
+  consistent** — the `GET /v1/twap` row claimed `Backed by:
+  Redis cache` while the same row's parenthetical said
+  `TWAP-via-orchestrator path is TBD`. Both can't be true; the
+  handler at `internal/api/v1/twap.go` runs `aggregate.TWAP`
+  against the trades hypertable on every request — there is no
+  TWAP cache. Row updated to `Trades hypertable (on-query)` and
+  the Deferred section grew an explicit `TWAP-via-orchestrator
+  pre-compute` entry so the parenthetical "see Deferred" cites
+  something real. Continuation of the L6.5 doc-sweep.
+
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
