@@ -122,7 +122,7 @@ Within each surface, ordered by dependency.
 | L6.1 | CHANGELOG hygiene + SemVer policy ([`docs/architecture/semver-policy.md`](semver-policy.md)) | Wk 10 | half-day | — | L6.4 | release process | 🟢 |
 | L6.2 | Release notes template + release-process runbook ([`.github/RELEASE_NOTES_TEMPLATE.md`](../../.github/RELEASE_NOTES_TEMPLATE.md), [`docs/operations/release-process.md`](../operations/release-process.md)) | Wk 10 | half-day | L6.1 | L6.4 | docs | 🟢 |
 | L6.3 | Public-flip prep — strategy for migrating private repo content to new public repo ([`docs/operations/public-flip.md`](../operations/public-flip.md)) | Wk 10 | hour planning | — | L6.4 | repo strategy | 🟢 |
-| L6.4 | Production cutover — DNS flip, enable public rate-limit tier | Wk 10 | hour | All above | — | infra | 🔴 |
+| L6.4 | Production cutover — DNS flip, enable public rate-limit tier. End-to-end orchestration runbook ready in [`docs/operations/launch-day-checklist.md`](../operations/launch-day-checklist.md): T-7 / T-3 / T-1 / T-0 stages, per-step pass conditions, pointer to [`rollback.md`](../operations/rollback.md) for failure-mode triage. The `🔴` reflects "operator hasn't pulled the trigger yet"; flips ✅ when the cut completes per the checklist's pass condition. | Wk 10 | hour | All above | — | infra (operator runbook ready) | 🔴 |
 | L6.5 | Documentation sweep — every runbook verified, every ADR accurate, every config option documented | Wk 10 | full day | All above | L6.4 | docs | 🔴 |
 | L6.6 | Customer sign-off demo | Wk 10 | external | L3.*, L4.*, L5.* | L6.4 | — | 🔴 |
 | L6.7 | First 24-h post-launch watch | Wk 10 | day | L6.4 | — | rotating shifts | 🔴 |
