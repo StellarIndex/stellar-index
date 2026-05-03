@@ -17,6 +17,20 @@ against.
 
 ### Fixed
 
+- **`oracle-manipulation-defense.md` gap-analysis reflects shipped
+  ADR-0019 implementation** — the table marked Phase 1
+  ("Not yet shipped"), Phase 2 ("Not yet shipped"), and the
+  `internal/divergence/` cross-reference ("Planned package per
+  CLAUDE.md"). All three are live: Phase 1 in
+  `internal/aggregate/anomaly/`, Phase 2 in
+  `internal/aggregate/baseline/` + `internal/aggregate/confidence/`,
+  and the divergence package writes
+  `cachekeys.Divergence(asset)` while the orchestrator reads
+  it via `lookupDivergencePct` and feeds
+  `confidence.CrossOracleFactor`. Updated each row to point at
+  the live code; the divergence row notes that L7.3 (the
+  post-launch deferred item) is about operational coverage,
+  not the wiring itself.
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
