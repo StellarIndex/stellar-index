@@ -17,6 +17,17 @@ against.
 
 ### Fixed
 
+- **`oracle-stale` runbook lists the correct `source` label
+  values** — the runbook said the alert label is one of
+  `reflector-dex / reflector-cex / reflector-fx / future
+  redstone / band / chainlink-http`, but redstone (`SourceName
+  = "redstone"`) and band (`SourceName = "band"`) are both
+  shipped sources that already register
+  `OracleResolutionSeconds` in `internal/pipeline/dispatcher.go`,
+  and chainlink-http lives in `internal/divergence/` —
+  it's a divergence reference, not an oracle source, and
+  doesn't emit `ratesengine_oracle_*` metrics at all. Replaced
+  the speculative list with the five actual label values.
 - **`/v1/account/me` now returns the credential's `label`** —
   `APIKeyRecord.Label` was set at creation time and the OpenAPI
   `Account` schema declared the field, but the path
