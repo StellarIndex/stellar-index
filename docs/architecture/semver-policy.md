@@ -28,10 +28,14 @@ is bound by the rules below. **`internal/*` is NOT** — internal
 packages can be refactored, renamed, or deleted in any PR.
 
 Currently shipped:
-- `pkg/client` — Go SDK for the public API ([#201](https://github.com/RatesEngine/rates-engine/pull/201))
-
-Planned:
-- `pkg/types` — wire types shared between SDK + server (deferred until refactor; today the SDK duplicates types deliberately to keep the skeleton focused)
+- `pkg/client` — Go SDK for the public API
+  ([#201](https://github.com/RatesEngine/rates-engine/pull/201)).
+  Wire-shape types (`Envelope`, `Flags`, `Pagination`,
+  `AssetDetail`, …) live in `pkg/client/types.go` rather than a
+  separate `pkg/types` package — see CLAUDE.md "Repo map" for the
+  rationale. The server's `internal/api/v1` defines its own
+  envelope intentionally; the duplication is the SemVer firewall
+  between the SDK's public surface and internal handler shapes.
 
 ### What constitutes a breaking change
 
