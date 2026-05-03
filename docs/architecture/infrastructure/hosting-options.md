@@ -1,14 +1,19 @@
 ---
 title: Hosting Options — Skipping Colo Without Boxing Ourselves In
 last_verified: 2026-05-02
-status: draft — decision at Week 1 procurement call
+status: superseded — Hetzner FSN1 chosen for R1 ([r1-deployment-state.md](../../operations/r1-deployment-state.md)); see [ADR-0016](../../adr/0016-per-region-storage-strategy.md) for the per-region strategy
 ---
 
 # Hosting Options — Skipping Colo Without Boxing Ourselves In
 
 **Owner:** @ash + @alex.
-**Decision deadline:** before end of Week 1 (we need a node syncing by
-Week 2–3 per [delivery-plan.md](../../discovery/delivery-plan.md)).
+**Decision:** Hetzner FSN1 (Falkenstein, DE) for R1, ratified
+via [ADR-0008](../../adr/0008-ha-topology.md) and operational
+since the host went live (see
+[r1-deployment-state.md](../../operations/r1-deployment-state.md)).
+R2 and R3 storage shapes follow the per-region strategy in
+[ADR-0016](../../adr/0016-per-region-storage-strategy.md). This doc
+is retained as the **option-space analysis** that informed the call.
 **Binds:** [archival-node-spec.md](archival-node-spec.md) still defines
 the shape of what we deploy; this doc answers *where* we deploy it.
 
@@ -244,7 +249,7 @@ the same regardless of who installed it physically.
 
 - Latitude covers 3 regions on one bill — cleanest multi-region
   story.
-- Or mix Hetzner (R1/Falkenstein) + Latitude (R2/NYC, R3/Tokyo).
+- Or mix Hetzner (R1/London) + Latitude (R2/NYC, R3/Tokyo).
 - Or move to Equinix Metal in all 3 regions for the premium path.
 
 ### 5.4 Post-launch (month 4+): migrate to owned colo
