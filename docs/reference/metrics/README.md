@@ -258,7 +258,6 @@ Publisher and this Subscriber — investigate if non-zero).
 `malformed` = JSON decoded but Asset or Quote was empty (no
 valid topic to route to; message dropped). All paths log; only
 the `ok` path forwards.
-
 ### `ratesengine_aggregator_dropped_trades_total`
 
 Counter, label `reason` (`class` / `outlier`).
