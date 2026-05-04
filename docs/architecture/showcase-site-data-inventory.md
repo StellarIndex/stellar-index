@@ -491,6 +491,40 @@ Status-badge rules (transparent, hover to see):
 | **WASM history timeline** | Across-contract upgrade timeline | `GET /v1/protocols/{slug}/wasm-history` | ❌ new |
 | **Volume / TVL ratio chart** | Capital efficiency over time | `GET /v1/protocols/{slug}/efficiency?from=…&to=…` | ❌ new |
 | **LP yield (DEX)** | Pool-by-pool fee revenue / TVL APR | `GET /v1/protocols/{slug}/yields` | ❌ new |
+| **Router attribution** (router protocols) | "Of $X moved last 24h, 62% went through Soroswap's own AMM, 18% routed to Phoenix, 12% to Aquarius, 8% to SDEX" | `GET /v1/protocols/{slug}/router-attribution?window=24h` | ❌ new (see §7.9.1) |
+| **Routed-in share** (underlying-venue protocols) | "62% of Phoenix volume last week came in via the Soroswap router" | `GET /v1/protocols/{slug}/routed-in?window=7d` | ❌ new (see §7.9.1) |
+| **Aggregator exposure** (aggregator protocols) | DeFindex-style: "$4.2M deployed in Blend supply, $1.1M Blend borrow, $800k Aquarius LP" | `GET /v1/protocols/{slug}/exposure?window=24h` | ❌ new (see §7.9.1) |
+| **Per-vault exposure** (aggregator protocols) | One row per vault contract — capital allocation per underlying protocol | `GET /v1/protocols/{slug}/vaults` | ❌ new (see §7.9.1) |
+
+### §7.9.1 Router + aggregator attribution (cross-cutting)
+
+Soroswap and DeFindex are both **routers / aggregators**: their on-chain entry points (`SoroswapRouter`, DeFindex vault contracts) wrap underlying liquidity venues. The interesting question is "where does the money actually land?" — and from the underlying venue's POV, "how much of my volume is routed-in vs direct?"
+
+This is a **cross-cutting attribution layer**, not a per-protocol panel. It powers four places on the site:
+
+1. **Soroswap protocol page** — router-attribution donut: how much of Soroswap-routed volume hits Soroswap pairs vs Phoenix vs Aquarius vs SDEX.
+2. **DeFindex (and any aggregator) protocol page** — exposure chart: where is the deposited capital deployed underneath, per underlying protocol.
+3. **Underlying venues' protocol pages** (Phoenix, Aquarius, SDEX, Blend) — routed-in share: what % of my flow is direct vs via a router/aggregator.
+4. **Per-pair page** (§7.4) — "this trade hit Phoenix via Soroswap router" badge on each row of the live tape.
+
+#### How attribution works
+
+When a tx invokes a known router/aggregator contract, every trade or state-change event emitted by the **same tx batch** is attributed to that router. Mechanism:
+
+- Maintain a `routers` registry: `(contract_id, name, kind, protocol_slug)`. Seeded from known router/vault contracts; auto-discovery extends it (see decoder hook below).
+- Dispatcher's `ContractCallDecoder` fires on any invocation of a router contract. The dispatcher pushes the `routed_via` tag into a per-tx context.
+- Every trade inserted from the same tx batch gets a `routed_via` column populated.
+- For aggregator vaults (DeFindex), additional layer: when a vault invokes an underlying protocol (e.g. Blend's `submit`), the resulting Blend state-change is tagged with `routed_via=defindex` AND captures the specific vault contract id for vault-level breakdown.
+
+Attribution is **post-hoc and additive**: a Phoenix swap remains a Phoenix trade in the trades hypertable (so Phoenix volume is unchanged); the `routed_via` column is just an extra dimension you can group by.
+
+#### What about multi-hop routes?
+
+A single tx can route through multiple pools (`A → Soroswap pair X → Phoenix pool Y → Aquarius pool Z`). Each leg emits its own underlying event; **all legs share the same `routed_via` tag** because they're all in the same tx batch. The router's tx → 3 trades, all tagged `routed_via=soroswap-router`.
+
+#### What about nested routers?
+
+A DeFindex vault could deposit into Blend, which itself triggers an internal swap. The first router observed on the call stack wins (`routed_via=defindex`); the inner Blend interaction is captured as a separate dimension via the aggregator-specific tracking on `aggregator_exposures` (§9.9). No need to support arbitrary nesting at v1.
 
 ### §7.10 Contract detail (`/contracts/{C-strkey}`)
 
@@ -927,6 +961,59 @@ SELECT create_hypertable('classic_asset_stats_5m', 'bucket',
                          if_not_exists => TRUE);
 ```
 
+### 9.9 `routers` + `routed_via` + `aggregator_exposures`
+
+Powers §7.9.1 — router/aggregator attribution.
+
+```sql
+-- 0025
+CREATE TABLE routers (
+    contract_id    text         PRIMARY KEY,    -- C-strkey
+    name           text         NOT NULL,       -- "soroswap-router-v1", "defindex-vault-{...}"
+    kind           text         NOT NULL CHECK (kind IN ('router','aggregator-vault')),
+    protocol_slug  text         NOT NULL,       -- "soroswap" / "defindex" / …
+    added_at       timestamptz  NOT NULL DEFAULT now(),
+    auto_discovered boolean     NOT NULL DEFAULT false,
+    notes          text
+);
+
+CREATE INDEX routers_protocol_idx ON routers (protocol_slug);
+
+-- Add the attribution column to the existing trades hypertable.
+ALTER TABLE trades ADD COLUMN routed_via text;
+CREATE INDEX trades_routed_via_idx ON trades (routed_via)
+    WHERE routed_via IS NOT NULL;
+
+-- Aggregator-vault exposure: capital allocation per (vault, underlying protocol).
+-- Distinct from routed_via tagging — vaults hold capital persistently, not just
+-- per-tx. Refreshed on every state-changing interaction the vault makes with
+-- an underlying protocol.
+CREATE TABLE aggregator_exposures (
+    vault_contract_id  text         NOT NULL,
+    underlying_protocol text         NOT NULL,    -- "blend", "aquarius", "soroswap", …
+    observed_at        timestamptz  NOT NULL,
+    observed_at_ledger integer      NOT NULL,
+    exposure_usd       numeric      NOT NULL,
+    detail             jsonb,                     -- e.g. {"blend_supply": ..., "blend_borrow": ...}
+    PRIMARY KEY (vault_contract_id, underlying_protocol, observed_at)
+);
+
+SELECT create_hypertable('aggregator_exposures', 'observed_at',
+                         chunk_time_interval => INTERVAL '7 days',
+                         if_not_exists => TRUE);
+
+CREATE INDEX aggregator_exposures_vault_idx
+    ON aggregator_exposures (vault_contract_id, observed_at DESC);
+CREATE INDEX aggregator_exposures_protocol_idx
+    ON aggregator_exposures (underlying_protocol, observed_at DESC);
+```
+
+**Backfill:** mechanical. For each known router contract, walk the
+trades hypertable and the dispatcher's contract-call observations,
+tag any same-tx trades. For DeFindex, walk Blend / Aquarius / etc.
+state-change events from any known vault contract and write
+`aggregator_exposures` rows.
+
 ---
 
 ## 10. API endpoint additions (full list)
@@ -998,6 +1085,14 @@ Grouped by responsibility. Each carries `as_of_ledger` unless noted.
 | `GET /v1/protocols/{slug}/efficiency` | Volume/TVL ratio |
 | `GET /v1/protocols/{slug}/yields` | LP yields |
 | `GET /v1/protocols/tvl-share?from=…&to=…&granularity=…` | Stacked-area share |
+| `GET /v1/protocols/{slug}/router-attribution?window=…` | (router protocols) — share of router-driven volume by underlying venue |
+| `GET /v1/protocols/{slug}/routed-in?window=…` | (any protocol) — share of own volume that arrived via a router/aggregator |
+| `GET /v1/protocols/{slug}/exposure?window=…` | (aggregator protocols) — capital deployed per underlying protocol |
+| `GET /v1/protocols/{slug}/vaults` | (aggregator protocols) — vault list with per-vault exposure summary |
+| `GET /v1/protocols/{slug}/vaults/{contract_id}` | One vault's detail + history |
+| `GET /v1/protocols/{slug}/vaults/{contract_id}/exposure?from=…&to=…` | Per-vault exposure over time |
+| `GET /v1/routers` | All registered router/aggregator contracts |
+| `GET /v1/routers/{contract_id}` | Detail for one router/vault contract |
 
 ### 10.6 Contracts
 
@@ -1180,6 +1275,24 @@ What the Go side has to add. Roughly grouped by feature.
 ### 11.8 SEP-1 rate-limiting
 
 - The only outbound HTTPS we add. Per `home_domain`: max 1 RPS, retry with exponential backoff, weekly stale-cache acceptance. Background worker runs nightly + on-demand for newly-discovered issuers.
+
+### 11.9 Router + aggregator attribution (§7.9.1)
+
+- New `internal/sources/router_attribution/` observer:
+  - Hooks the dispatcher's `ContractCallDecoder` for every contract in the `routers` registry. (Same plumbing the Band oracle decoder uses today — no new dispatcher seam.)
+  - When a router invocation is observed, pushes `routed_via=<router_name>` into a tx-scoped context that lives across the rest of the tx batch.
+  - Trades inserted by other decoders within the same tx batch read the context + populate `trades.routed_via`.
+- **Router seed**: ship the registry pre-populated with known router contracts at v1:
+  - `SoroswapRouter` (current + historical WASM versions discovered via `wasm-history`).
+  - `DefindexFactory` + a curated list of vault contracts derived from factory `new_vault` events.
+  - Extends as new routers come online — auto-discovery heuristic flags candidates (contracts that frequently invoke ≥2 underlying-protocol contracts in single tx batches), an operator promotes confirmed ones into the registry.
+- **DeFindex aggregator-exposure tracker**: separate from the per-tx routed-via tagging. A periodic worker that, for each known DeFindex vault contract, queries its on-chain state (vault token holdings, deposited amounts in underlying protocols) and writes `aggregator_exposures` rows. Frequency: same as TVL ticker (1 min).
+- **Backfill**: walk historical txs that invoked any known router contract, tag the trades they generated. Walk Blend / Aquarius / etc. state-change events from any known vault, write `aggregator_exposures` rows.
+
+**Gotchas:**
+- Router contract WASM versioning: a router can be upgraded; function names / signatures may change. Per-WASM-hash decoder audit (the existing CLAUDE.md "Soroban DeFi contracts upgrade in place" rule) applies. Gate backfill against unaudited router WASM.
+- DeFindex vault discovery is open-ended; ship at v1 with a curated allowlist, add auto-discovery heuristic in a follow-up.
+- "Routing through a router that itself routes through another router" (nested routers) — at v1, attribute to the outermost router only. Don't try to support arbitrary nesting until we see it in the wild.
 
 ---
 
