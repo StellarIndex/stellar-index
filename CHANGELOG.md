@@ -15,6 +15,25 @@ against.
 
 ## [Unreleased]
 
+### Added
+
+- **Test infrastructure**: `TestOpenAPIExamplesParseAsCanonicalAssets`
+  in `internal/api/v1/openapi_examples_test.go` walks the OpenAPI
+  spec and asserts every documented `asset` / `asset_id` /
+  `asset_ids` / `base` / `quote` parameter example parses
+  successfully via `canonical.ParseAsset`. Catches the
+  symbol-vs-canonical drift class at PR-time (no network
+  required) so a future PR setting `example: BTC` on
+  `/v1/price?asset=` fails CI immediately rather than waiting to
+  reach prod and break the Scalar Send button.
+- **CI**: `.github/workflows/api-audit.yml` — runs
+  `scripts/dev/audit-public-api.sh` against
+  `https://api.ratesengine.net` on every push to `main` that
+  touches `openapi/**`, `internal/api/**`, or the audit script
+  itself, plus on manual workflow_dispatch with an optional
+  `api_base_url` input. No schedule; the existing audit script
+  is published for cron / Healthchecks.io use.
+
 ### Fixed
 
 - **Docs (OpenAPI)**: every public-tier `/v1/*` endpoint's
