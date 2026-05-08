@@ -44,6 +44,15 @@ against.
 
 ### Fixed
 
+- **Wider lookback windows for /v1/coins change_1h_pct,
+  change_24h_pct, change_7d_pct.** Previous windows were
+  10-minute (1h), 1-hour (24h), 4-hour (7d) — too tight to
+  catch low-volume pairs reliably. Widened to 35-minute,
+  2.5-hour, 14-hour respectively. The DISTINCT ON ... ORDER
+  BY bucket DESC selector still picks the latest available
+  row inside the window so the anchor stays close to the
+  target timestamp; widening only kicks in when the target
+  bucket itself is empty.
 - **/dexes detail link now points at /dexes/{source}** instead of
   /sources/{source}; the latter route exists but rendered the
   source-registry view, not the per-DEX detail page.
