@@ -15,6 +15,20 @@ against.
 
 ## [Unreleased]
 
+### Added
+
+- **`/convert/[from]/[to]` static-prerendered conversion pages.**
+  Full N×N matrix (~12k pages: 110 × 109 minus identity pairs).
+  Each page renders the live mid-market rate, an interactive
+  ConvertPair widget pre-filled with the pair, and "X = Y"
+  snippets at common amounts (1 / 10 / 100 / 1000 / 10000) for
+  SEO body content. Inverse pair, both currencies' overview pages,
+  and source attribution all linked. Each page has its own
+  canonical URL + OG card with the live rate baked into the title
+  and description. Includes a server-side initial rate so the
+  first paint is correct without a client roundtrip; the
+  ConvertPair refreshes every 60s after that.
+
 ### Changed
 
 - **GH Actions cost: drop arm64 from release.yml + narrow
