@@ -217,7 +217,7 @@ export function CurrenciesView() {
           <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                <Th>{/* star column */}</Th>
+                <Th><span className="sr-only">Watchlist</span></Th>
                 <SortableTh sortKey="rank" current={sortKey} dir={sortDir} onToggle={toggleSort}>
                   #
                 </SortableTh>
@@ -251,14 +251,14 @@ export function CurrenciesView() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {isLoading && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">
                     Loading currencies…
                   </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-slate-500">
                     <div className="space-y-2">
                       <div>
                         {q
