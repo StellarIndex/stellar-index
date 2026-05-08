@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react';
 
 import { SourceStatsPanel } from '@/app/dexes/[source]/SourceStatsPanel';
 import { PairsTable } from './PairsTable';
+import { VenueChart } from './VenueChart';
 
 const CEX_INFO: Record<
   string,
@@ -103,6 +104,8 @@ export default async function ExchangeDetailPage({
       </header>
 
       <SourceStatsPanel source={name} unitsLabel="pairs" />
+
+      <VenueChart venue={name} />
 
       <PairsTable source={name} exchangeName={info.name} />
 

@@ -35,6 +35,12 @@ against.
 - **/exchanges/{venue} subscription disclaimer** — explicit
   amber-tinted callout explaining the curated pair set is
   by-design, not a data bug.
+- **/exchanges/{venue} candle chart** — TradingView-style
+  lightweight-charts panel with selectable pair (defaults to
+  the venue's top-volume pair), timeframe (24h/7d/30d/1y/all)
+  and granularity (1m/15m/1h/4h/1d). Reuses the same chart
+  component that powers /assets/[slug]?tab=chart and
+  /markets/[pair].
 
 ### Fixed
 
