@@ -84,12 +84,15 @@ export function AssetConverter({
   // Available targets — featured first, then the rest if "show all"
   // is toggled. Filter against the forex snapshot so we don't list
   // tickers we can't actually convert.
-  const allTickers = (fx.data ?? []).map((c) => c.ticker).sort();
-  const tickerSet = new Set(allTickers);
-  tickerSet.add('USD');
-  const visibleTickers = showAll
-    ? Array.from(tickerSet).sort()
-    : FEATURED.filter((t) => tickerSet.has(t));
+  // Memoise the ticker set so its identity is stable across renders
+  // (otherwise the useEffect dependency tracker reruns on every render).
+  const tickerSet = useMemo(() => {
+    const s = new Set((fx.data ?? []).map((c) => c.ticker));
+    s.add('USD');
+    return s;
+  }, [fx.data]);
+
+  const allTickers = useMemo(() => Array.from(tickerSet).sort(), [tickerSet]);
 
   // Once any currency outside the FEATURED set is picked
   // (e.g. via the searchable combobox typing "ZAR"), promote to
@@ -126,7 +129,7 @@ export function AssetConverter({
                   setTarget(v);
                   setShowAll(true);
                 }}
-                tickers={Array.from(tickerSet).sort()}
+                tickers={allTickers}
               />
             ) : (
               <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -160,7 +163,7 @@ export function AssetConverter({
                   setTarget(v);
                   setShowAll(true);
                 }}
-                tickers={Array.from(tickerSet).sort()}
+                tickers={allTickers}
               />
             ) : (
               <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300">
