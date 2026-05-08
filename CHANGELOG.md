@@ -15,6 +15,27 @@ against.
 
 ## [Unreleased]
 
+### Performance
+
+- **Background prewarm goroutine** for the heaviest API caches.
+  /v1/sources?include=stats and /v1/markets / /v1/pools each scan
+  ~24h of the trades hypertable on cold paths (5–10s); the
+  rc.35/rc.36 caches drop them to <1ms but TTL expiry meant the
+  first user request after a cache miss still paid the full
+  query cost. A 25s-cadence goroutine in cmd/ratesengine-api now
+  re-runs the queries just inside the 30/60s TTLs so user
+  requests always land on a warm cache.
+
+### Added
+
+- **/exchanges all-CEX markets table** — sorted by 24h USD
+  volume across every venue, merged client-side from four
+  /v1/markets?source=… requests. Visible on the index without
+  having to drill into each venue.
+- **/exchanges/{venue} subscription disclaimer** — explicit
+  amber-tinted callout explaining the curated pair set is
+  by-design, not a data bug.
+
 ### Fixed
 
 - **/dexes detail link now points at /dexes/{source}** instead of
