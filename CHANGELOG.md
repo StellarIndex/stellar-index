@@ -23,6 +23,12 @@ against.
   inverse rate (with `▲▼` indicator + `aria-sort`); a small
   filter input above the table narrows down to a substring
   match. Featured-only view (default) keeps its terse render.
+- **Explorer**: "Download CSV" button on the
+  `/currencies/{ticker}` history panel. Builds an RFC 4180 CSV
+  from the already-loaded series (no extra fetch) and triggers
+  a browser download via a Blob URL. Filename is
+  `ratesengine-{TICKER}-USD-{range}.csv`; columns are
+  `date, 1_USD_in_TICKER, 1_TICKER_in_USD`.
 
 ### Fixed
 
