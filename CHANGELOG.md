@@ -15,6 +15,19 @@ against.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auth-failure problem+json `type` URL spelling unified**. The
+  middleware-level 401 (no-auth-at-all) and the account-handler
+  401 (auth-needed-but-rejected) had drifted to two different
+  `type` URLs — `errors/unauthorized` (American, middleware) and
+  `errors/unauthorised` (British, account.go × 5). Clients keying
+  on the type URL saw two distinct error categories for what's
+  semantically one auth failure surface. Standardised on the
+  American spelling (matches HTTP-spec wording: "Unauthorized");
+  all 5 `account.go` call sites updated. No tests pinned the
+  British form so no test churn.
+
 ### Added
 
 - **`/v1/price` fiat-vs-fiat cross-rate fallback**: when both
