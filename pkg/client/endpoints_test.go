@@ -1092,6 +1092,134 @@ func TestVersion_HappyPath(t *testing.T) {
 	}
 }
 
+// TestChart_HappyPath — pins the binned-series shape and the
+// timeframe + granularity query-param wiring.
+func TestChart_HappyPath(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chart" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("timeframe"); got != "24h" {
+			t.Errorf("timeframe = %q, want 24h", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"asset_id":"native","quote":"fiat:USD","granularity":"1h","timeframe":"24h","price_type":"vwap","points":[{"t":"2026-05-08T00:00:00Z","p":"0.158","v_usd":"20808.05"}]},"as_of":"2026-05-08T23:00:00Z","flags":{}}`))
+	})
+	got, err := c.Chart(context.Background(), client.ChartQuery{
+		Asset: "native", Timeframe: "24h",
+	})
+	if err != nil {
+		t.Fatalf("Chart: %v", err)
+	}
+	if got.Data.Granularity != "1h" || len(got.Data.Points) != 1 {
+		t.Errorf("Data = %+v", got.Data)
+	}
+}
+
+// TestObservations_HappyPath — pins the per-source array shape
+// and the optional source/aggregate query-param wiring.
+func TestObservations_HappyPath(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/observations" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("aggregate"); got != "latest" {
+			t.Errorf("aggregate = %q, want latest", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"source":"sdex","ledger":62480000,"tx_hash":"abc","ts":"2026-05-08T23:00:00Z","base_asset":"native","quote_asset":"USDC-G…","price":"6.13"}],"as_of":"2026-05-08T23:00:00Z","flags":{}}`))
+	})
+	got, err := c.Observations(context.Background(), client.ObservationsQuery{
+		Asset: "native", Aggregate: "latest",
+	})
+	if err != nil {
+		t.Fatalf("Observations: %v", err)
+	}
+	if len(got.Data) != 1 || got.Data[0].Source != "sdex" {
+		t.Errorf("Data = %+v", got.Data)
+	}
+}
+
+// TestChangeSummary_HappyPath — pins the per-entity rollup shape
+// and the URL path-arg encoding for entity_type + entity_id.
+func TestChangeSummary_HappyPath(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/changes/coin/crypto:XLM" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"entity_type":"coin","entity_id":"crypto:XLM","refreshed_at":"2026-05-09T00:00:00Z","current_value":0.163,"h24_delta_pct":3.21,"streak_direction":"down","acceleration":"increasing"},"as_of":"2026-05-09T00:00:00Z","flags":{}}`))
+	})
+	got, err := c.ChangeSummary(context.Background(), client.ChangeSummaryQuery{
+		EntityType: "coin", EntityID: "crypto:XLM",
+	})
+	if err != nil {
+		t.Fatalf("ChangeSummary: %v", err)
+	}
+	if got.Data.EntityID != "crypto:XLM" || got.Data.StreakDirection != "down" {
+		t.Errorf("Data = %+v", got.Data)
+	}
+	if got.Data.H24DeltaPct == nil || *got.Data.H24DeltaPct != 3.21 {
+		t.Errorf("H24DeltaPct = %v, want 3.21", got.Data.H24DeltaPct)
+	}
+}
+
+// TestChangeSummary_RequiresFields — both EntityType and
+// EntityID are mandatory; empty values short-circuit.
+func TestChangeSummary_RequiresFields(t *testing.T) {
+	c := client.New(client.Options{BaseURL: "http://nope.invalid"})
+	if _, err := c.ChangeSummary(context.Background(), client.ChangeSummaryQuery{EntityID: "x"}); err == nil {
+		t.Error("ChangeSummary with empty EntityType returned no error")
+	}
+	if _, err := c.ChangeSummary(context.Background(), client.ChangeSummaryQuery{EntityType: "coin"}); err == nil {
+		t.Error("ChangeSummary with empty EntityID returned no error")
+	}
+}
+
+// TestIncidents_HappyPath — pins the wrapped envelope (incidents
+// + count fields) for the postmortem catalogue.
+func TestIncidents_HappyPath(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/incidents" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"incidents":[{"slug":"2026-05-06-pg-locks","title":"Lock-table-full","severity":"SEV-3","status":"resolved","started_at":"2026-05-06T15:00:00Z","resolved_at":"2026-05-06T22:39:00Z","affected_components":["indexer","storage"],"body_markdown":"# Postmortem"}],"count":1},"as_of":"2026-05-08T23:00:00Z","flags":{}}`))
+	})
+	got, err := c.Incidents(context.Background())
+	if err != nil {
+		t.Fatalf("Incidents: %v", err)
+	}
+	if got.Data.Count != 1 || len(got.Data.Incidents) != 1 {
+		t.Errorf("Data = %+v", got.Data)
+	}
+	if got.Data.Incidents[0].Severity != "SEV-3" {
+		t.Errorf("Severity = %q, want SEV-3", got.Data.Incidents[0].Severity)
+	}
+}
+
+// TestSACWrappers_HappyPath — pins the map-shape (contract_id →
+// "<CODE>:<G_STRKEY>") that lets clients resolve a SAC contract
+// back to its underlying classic asset.
+func TestSACWrappers_HappyPath(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sac-wrappers" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"CA4L5XQ7FY7BTJAAD6VPW6JPSJ3M2A62BBULXH7XYHLHAOFFY6SBT2Z4":"PSY:GCH3HFAY25TU2CPUEMF7OT7PGHUMXQITQQOOKZV6VRETY7SCEPARAEGO"},"as_of":"2026-05-08T23:00:00Z","flags":{}}`))
+	})
+	got, err := c.SACWrappers(context.Background())
+	if err != nil {
+		t.Fatalf("SACWrappers: %v", err)
+	}
+	const wantContract = "CA4L5XQ7FY7BTJAAD6VPW6JPSJ3M2A62BBULXH7XYHLHAOFFY6SBT2Z4"
+	const wantAsset = "PSY:GCH3HFAY25TU2CPUEMF7OT7PGHUMXQITQQOOKZV6VRETY7SCEPARAEGO"
+	if v := got.Data[wantContract]; v != wantAsset {
+		t.Errorf("got.Data[contract] = %q, want %q", v, wantAsset)
+	}
+}
+
 // TestCursors_HappyPath — diagnostics endpoint returns
 // non-paginated array; test pins the wire shape.
 func TestCursors_HappyPath(t *testing.T) {

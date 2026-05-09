@@ -511,3 +511,64 @@ type Version struct {
 	Dirty     string `json:"dirty"`
 	GoVersion string `json:"go_version"`
 }
+
+// ChartSeries is the data shape returned by [Client.Chart]. The
+// per-point time series uses the same shape as
+// [HistoryPoint] (`t` / `p` / `v_usd`) but the envelope-level
+// metadata differs (Timeframe + bound Granularity).
+type ChartSeries struct {
+	AssetID     string         `json:"asset_id"`
+	Quote       string         `json:"quote"`
+	Granularity string         `json:"granularity"`
+	Timeframe   string         `json:"timeframe"`
+	PriceType   string         `json:"price_type"`
+	Points      []HistoryPoint `json:"points"`
+}
+
+// ChangeSummary is the data shape returned by [Client.ChangeSummary]
+// — per-entity multi-window delta rollup.
+type ChangeSummary struct {
+	EntityType   string  `json:"entity_type"`
+	EntityID     string  `json:"entity_id"`
+	RefreshedAt  string  `json:"refreshed_at"`
+	CurrentValue float64 `json:"current_value"`
+
+	H1Value     *float64 `json:"h1_value,omitempty"`
+	H1DeltaPct  *float64 `json:"h1_delta_pct,omitempty"`
+	H24Value    *float64 `json:"h24_value,omitempty"`
+	H24DeltaPct *float64 `json:"h24_delta_pct,omitempty"`
+	D7Value     *float64 `json:"d7_value,omitempty"`
+	D7DeltaPct  *float64 `json:"d7_delta_pct,omitempty"`
+	D30Value    *float64 `json:"d30_value,omitempty"`
+	D30DeltaPct *float64 `json:"d30_delta_pct,omitempty"`
+
+	ATHValue *float64 `json:"ath_value,omitempty"`
+	ATHAt    string   `json:"ath_at,omitempty"`
+	ATLValue *float64 `json:"atl_value,omitempty"`
+	ATLAt    string   `json:"atl_at,omitempty"`
+
+	StreakDirection string `json:"streak_direction,omitempty"`
+	StreakDays      *int   `json:"streak_days,omitempty"`
+	Acceleration    string `json:"acceleration,omitempty"`
+}
+
+// IncidentsPayload is the wire envelope for [Client.Incidents].
+// The list lives under `Incidents`; `Count` echoes len(Incidents).
+type IncidentsPayload struct {
+	Incidents []Incident `json:"incidents"`
+	Count     int        `json:"count"`
+}
+
+// Incident is one entry in the incident-postmortem catalogue —
+// the same shape consumed by status.ratesengine.net's
+// `/incident/[slug]` route.
+type Incident struct {
+	Slug               string    `json:"slug"`
+	Title              string    `json:"title"`
+	Severity           string    `json:"severity"` // SEV-1 / SEV-2 / SEV-3
+	Status             string    `json:"status"`   // active / resolved
+	StartedAt          time.Time `json:"started_at"`
+	ResolvedAt         time.Time `json:"resolved_at,omitempty"`
+	AffectedComponents []string  `json:"affected_components,omitempty"`
+	BodyMarkdown       string    `json:"body_markdown,omitempty"`
+}

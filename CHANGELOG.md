@@ -17,6 +17,14 @@ against.
 
 ### Added
 
+- **`pkg/client`: SDK coverage gap fully closed**. Final batch
+  after #1122/#1123/#1124. Adds `Client.Chart`,
+  `Client.Observations`, `Client.ChangeSummary`, `Client.Incidents`,
+  `Client.SACWrappers` with full wire types (`ChartSeries`,
+  `ChangeSummary`, `IncidentsPayload`, `Incident`) and 6 unit
+  tests. Every endpoint registered in `internal/api/v1/server.go`
+  now has a typed Go-client wrapper. Together the four batches
+  added 14 methods, 9 wire types, and 23 unit tests.
 - **`/v1/price` fiat-vs-fiat cross-rate fallback**: when both
   `asset` and `quote` are fiat (e.g. `asset=fiat:EUR&quote=fiat:USD`)
   and the Timescale + Redis VWAP paths both miss, the handler
