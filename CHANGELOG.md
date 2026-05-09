@@ -15,6 +15,15 @@ against.
 
 ## [Unreleased]
 
+### Added
+
+- **`pkg/client`: `LendingPools(ctx)`** SDK method for
+  `GET /v1/lending/pools`. Mirrors the wire shape of every Blend
+  pool observed in the trailing 7d auction stream — `LendingPool`
+  struct stays additive (TVL / utilisation / supply+borrow APYs
+  land in subsequent server releases without needing an SDK
+  bump, since the JSON decoder ignores unknown fields).
+
 ### Fixed
 
 - **`/v1/markets?include=sparkline` shares the 8s timeout budget
