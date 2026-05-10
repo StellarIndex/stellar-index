@@ -168,6 +168,18 @@ against.
 
 ### Fixed
 
+- **Explorer `/exchanges/<venue>` chart now distinguishes "API
+  outage" from "no pairs reporting"**. The pair-list fetcher's
+  `.catch(() => setPairsLoading(false))` swallowed every error,
+  so a 5xx on `/v1/markets?source=<venue>` rendered the same
+  "No pairs reporting in the last 14 days" empty-state as a
+  genuinely-empty venue. Now captures the error message into
+  `pairsError` state and surfaces it as a red "Couldn't load
+  pairs for this venue (HTTP 503). Refresh to retry, or check
+  status.ratesengine.net" panel — operators investigating a
+  user-reported "exchange page is broken" can now distinguish
+  data gap from infra gap at a glance. Same silent-drop family
+  as the home-page fixes shipped in #1251. (PR #1254)
 - **`/v1/price/tip?asset=X&quote=fiat:USD` gets the same
   stablecoin-fiat proxy fallback as `/v1/price`** (#1217). Tip
   was 404'ing on the same shape — `tipWindowVWAP →
