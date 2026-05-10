@@ -168,6 +168,21 @@ against.
 
 ### Fixed
 
+- **`/v1/coins/{slug}` now accepts canonical asset_id form
+  (`USDC-GA5Z…`) alongside friendly slug (`USDC`).** Pre-fix,
+  copying a canonical asset_id from any other API surface
+  (`/v1/assets/{id}.asset_id`, `/v1/markets[].base`,
+  `/v1/observations[].base_asset`) into `/v1/coins/<id>` got
+  404 — inconsistent with `/v1/assets/{id}` which accepts both.
+  Confirmed broken on r1 (`/v1/coins/AQUA-GBNZILSTV…` 404'd while
+  `/v1/coins/AQUA` 200'd against the same row). Fix is a one-line
+  SQL widening: `WHERE COALESCE(slug, code) = $1 OR asset_id = $1`
+  plus an `(asset_id = $1) DESC` ORDER BY tiebreak so a friendly
+  slug input still wins over a code-only collision (preserving
+  the #45 scam-token disambiguation guard). Handler adds a
+  `canonical.ParseAsset` short-circuit so the canonical-form
+  path skips the case-insensitive retry it doesn't need.
+  (PR #1231)
 - **`/v1/price/tip?asset=X&quote=fiat:USD` gets the same
   stablecoin-fiat proxy fallback as `/v1/price`** (#1217). Tip
   was 404'ing on the same shape — `tipWindowVWAP →
