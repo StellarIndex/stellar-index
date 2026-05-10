@@ -17,6 +17,18 @@ against.
 
 ### Added
 
+- **Runbook + customer-facing incident post for the 2026-05-10
+  Redis-write-blocked outage** — r1's root filesystem reached
+  100% with 35 GB of stale logs, blocking Redis snapshots,
+  blocking aggregator VWAP cache writes, and surfacing as
+  `/v1/price` 404s on rewritten / triangulated / stablecoin-proxy
+  pairs for ~9 hours. New runbook at
+  `docs/operations/runbooks/redis-write-blocked-disk-full.md`
+  captures triage signals + the 5-minute recovery sequence
+  (vacuum journal, truncate syslog.1, rm WASM-audit stderr,
+  trigger Redis BGSAVE). Customer-facing incident post at
+  `internal/incidents/data/2026-05-10-redis-writes-blocked-disk-full.md`
+  is auto-served by `/v1/incidents`. (PR #1228)
 - **`/v1/pools?asset=<asset_id>` filter** — restrict the pools
   listing to rows where the asset appears on either side (base
   OR quote). Mirrors the same filter shape just shipped on
