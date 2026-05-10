@@ -987,3 +987,608 @@ func ExampleClient_Keys() {
 	// ak_a — production-server-1 (created 2026-05-01)
 	// ak_b — staging (created 2026-05-08)
 }
+
+// ExampleClient_Issuers demonstrates the issuer directory listing.
+// Sorted by total observation count across the issuer's classic
+// assets, descending — surfaces the most-active issuers first
+// (Centre / Anchorage / Stronghold etc.).
+//
+// HomeDomain + OrgName populate as the SEP-1 fetcher worker
+// resolves stellar.toml for each issuer. Pre-resolution they're
+// empty strings (not nil) — the wire shape stays uniform.
+func ExampleClient_Issuers() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"g_strkey":"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+				 "home_domain":"centre.io","org_name":"Centre Consortium",
+				 "asset_count":1,"total_observation_count":50000000},
+				{"g_strkey":"GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA",
+				 "home_domain":"aqua.network","org_name":"Aquarius",
+				 "asset_count":1,"total_observation_count":14764050}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Issuers(context.Background(), client.IssuersOptions{})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, iss := range got.Data {
+		fmt.Printf("%s — %d observations across %d assets\n",
+			iss.OrgName, iss.TotalObservationCount, iss.AssetCount)
+	}
+
+	// Output:
+	// Centre Consortium — 50000000 observations across 1 assets
+	// Aquarius — 14764050 observations across 1 assets
+}
+
+// ExampleClient_Issuer demonstrates fetching one issuer's full
+// detail by Stellar G-strkey — the SEP-1 overlay (org name,
+// home domain, auth flags, raw stellar.toml payload) plus a list
+// of every classic asset the issuer has minted that we observe
+// trades for.
+//
+// Auth flags (AuthRequired / AuthRevocable / AuthImmutable /
+// AuthClawback) are pointer-nil pre-resolution; render `—` rather
+// than fabricating false.
+func ExampleClient_Issuer() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"g_strkey": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+				"home_domain": "centre.io",
+				"org_name": "Centre Consortium",
+				"sep1_resolved_at": "2026-05-10T08:30:00Z",
+				"assets": [
+					{"asset_id":"USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+					 "code":"USDC","slug":"USDC",
+					 "first_seen_ledger":1000000,"last_seen_ledger":62500000,
+					 "observation_count":50000000}
+				]
+			},
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Issuer(context.Background(),
+		"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Printf("%s (%s) issues %d asset(s)\n",
+		got.Data.OrgName, got.Data.HomeDomain, len(got.Data.Assets))
+	for _, a := range got.Data.Assets {
+		fmt.Printf("  - %s (%d observations)\n", a.Code, a.ObservationCount)
+	}
+
+	// Output:
+	// Centre Consortium (centre.io) issues 1 asset(s)
+	//   - USDC (50000000 observations)
+}
+
+// ExampleClient_AssetMetadata demonstrates the SEP-1 overlay
+// endpoint — every field the issuer publishes via stellar.toml
+// (org name, image, anchor asset, issuance declarations).
+// Distinct from the F2 supply fields on AssetDetail (which
+// observe live ledger state); SEP-1 fields are issuer-declared.
+//
+// Sep1Status reports the resolution state. Overlay fields populate
+// only when Sep1Status == "verified"; other states leave them nil.
+func ExampleClient_AssetMetadata() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"asset_id": "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+				"home_domain": "centre.io",
+				"sep1_status": "verified",
+				"name": "USD Coin",
+				"description": "Centre-issued USDC stablecoin",
+				"image": "https://centre.io/assets/usdc.svg",
+				"org_name": "Centre Consortium",
+				"anchor_asset": "USD",
+				"anchor_asset_type": "fiat",
+				"is_unlimited": false
+			},
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.AssetMetadata(context.Background(),
+		"USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	if got.Data.Sep1Status != "verified" {
+		fmt.Println("not verified yet")
+		return
+	}
+	fmt.Printf("%s (%s) — anchored to %s\n",
+		*got.Data.Name, *got.Data.OrgName, *got.Data.AnchorAsset)
+
+	// Output: USD Coin (Centre Consortium) — anchored to USD
+}
+
+// ExampleClient_History demonstrates raw trade-level audit access
+// over an arbitrary [From, To) window. Distinct from
+// HistorySinceInception (bucketed VWAP/TWAP) — this surface
+// returns the underlying trade rows themselves, the same data
+// the aggregator consumes. Use cases: trade audits, regulatory
+// exports, custom aggregations the server doesn't pre-compute.
+//
+// Pagination via opaque `Cursor`; iterate while
+// `Pagination.Next` is non-empty.
+func ExampleClient_History() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"source":"binance","ledger":0,"tx_hash":"abc","op_index":0,
+				 "ts":"2026-05-10T11:30:00Z","base_asset":"native","quote_asset":"fiat:USD",
+				 "base_amount":"100000000","quote_amount":"16475000","price":"0.16475"},
+				{"source":"kraken","ledger":0,"tx_hash":"def","op_index":0,
+				 "ts":"2026-05-10T11:30:05Z","base_asset":"native","quote_asset":"fiat:USD",
+				 "base_amount":"50000000","quote_amount":"8240000","price":"0.16480"}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {},
+			"pagination": {"next": ""}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	from := time.Date(2026, 5, 10, 11, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	got, err := c.History(context.Background(), client.HistoryRangeQuery{
+		Base: "native", Quote: "fiat:USD", From: from, To: to, Limit: 100,
+	})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, t := range got.Data {
+		fmt.Printf("%s %s @ %s\n",
+			t.Source, t.Timestamp.Format("15:04:05"), t.Price)
+	}
+
+	// Output:
+	// binance 11:30:00 @ 0.16475
+	// kraken 11:30:05 @ 0.16480
+}
+
+// ExampleClient_Currency demonstrates fetching one fiat
+// currency's full detail — rate vs USD plus 24h/7d change,
+// 7-day history strip, and cross-rates against every other
+// listed currency. Backs the explorer's `/currencies/{ticker}
+
+// ExampleClient_Cursors demonstrates the per-source ingest
+// cursor surface — which sources are caught up, which are
+// lagging, how stale the last update is. Used for operator
+// dashboards and the explorer's `/diagnostics` page.
+//
+// Sources that track multiple positions independently (each
+// backfill range, each per-pair cursor) return one row per
+// (source, sub_source) tuple. `LagSeconds` is computed
+// server-side so callers don't need a clock-sync agreement
+// with the API.
+func ExampleClient_Cursors() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"source":"ledgerstream","last_ledger":62505721,
+				 "last_updated":"2026-05-10T12:00:00Z","lag_seconds":2},
+				{"source":"backfill","sub_source":"60000000-62000000:soroswap",
+				 "last_ledger":62000000,"last_updated":"2026-05-09T18:30:00Z",
+				 "lag_seconds":63000}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Cursors(context.Background())
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, cur := range got.Data {
+		fmt.Printf("%s: ledger=%d (lag=%ds)\n",
+			cur.Source, cur.LastLedger, cur.LagSeconds)
+	}
+
+	// Output:
+	// ledgerstream: ledger=62505721 (lag=2s)
+	// backfill: ledger=62000000 (lag=63000s)
+}
+
+// ExampleClient_PriceBatch demonstrates the bulk pricing surface.
+// One round-trip returns prices for many assets — the recommended
+// path for portfolio + multi-asset views (per the Freighter RFP
+// §"Bulk query support preferred"). Cross-region consistent: every
+// returned snapshot is from the same closed-bucket window
+// `/v1/price` would have served for the same instant.
+//
+// Routing is automatic: ≤100 ids → GET, 101..1000 → POST. The
+// envelope's `flags.stale` is the OR over per-row staleness.
+//
+// Missing observations (asset has no indexed data) are silently
+// omitted from the response array — callers needing to detect
+// "asset X had no observation" diff input vs output.
+func ExampleClient_PriceBatch() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"asset_id":"native","quote":"fiat:USD","price":"0.16475","price_type":"vwap","observed_at":"2026-05-10T12:00:00Z","window_seconds":60},
+				{"asset_id":"crypto:BTC","quote":"fiat:USD","price":"81000.00","price_type":"vwap","observed_at":"2026-05-10T12:00:00Z","window_seconds":60}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {"stale": false}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.PriceBatch(context.Background(), client.PriceBatchQuery{
+		AssetIDs: []string{"native", "crypto:BTC"},
+		Quote:    "fiat:USD",
+	})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, row := range got.Data {
+		fmt.Printf("%s = %s\n", row.AssetID, row.Price)
+	}
+
+	// Output:
+	// native = 0.16475
+	// crypto:BTC = 81000.00
+}
+
+// ExampleClient_Coins demonstrates the activity-ranked coin
+// listing — what powers the explorer's `/assets` page. Returns
+// rows sorted by 24h volume desc by default, with sparkline /
+// market cap / supply / change-window fields populated where
+// observable. Pagination via `NextCursor`.
+//
+// The `Coin` shape is intentionally pointer-rich: a nil
+// `PriceUSD` means "no current price" (different from "0.0"),
+// nil `Change24hPct` means "no past-bucket snapshot" (different
+// from "0% change"). Render `—` on nil rather than fabricating
+// a zero.
+func ExampleClient_Coins() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"coins": [
+					{"slug":"XLM","asset_id":"native","code":"XLM","first_seen_ledger":1,
+					 "last_seen_ledger":62500000,"observation_count":120000000,
+					 "price_usd":"0.16475","volume_24h_usd":"125000.00","change_24h_pct":"+0.83"},
+					{"slug":"USDC","asset_id":"USDC-GA5Z...","code":"USDC",
+					 "issuer":"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+					 "first_seen_ledger":1000000,"last_seen_ledger":62500000,"observation_count":50000000,
+					 "price_usd":"1.00","volume_24h_usd":"500000.00","change_24h_pct":"+0.00"}
+				],
+				"next_cursor": "eyJsYXN0IjoiVVNEQyJ9",
+				"limit": 25
+			},
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Coins(context.Background(), client.CoinsOptions{Limit: 25})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, coin := range got.Data.Coins {
+		price := "—"
+		if coin.PriceUSD != nil {
+			price = "$" + *coin.PriceUSD
+		}
+		fmt.Printf("%-6s %s\n", coin.Code, price)
+	}
+	if got.Data.NextCursor != "" {
+		fmt.Println("more pages: yes")
+	}
+
+	// Output:
+	// XLM    $0.16475
+	// USDC   $1.00
+	// more pages: yes
+}
+
+// ExampleClient_Coin demonstrates a single-coin lookup by friendly
+// slug. Same row shape as one element of CoinsPage.Coins, plus
+// MarketsCount which only populates on the per-coin endpoint.
+//
+// The slug accepts friendly aliases ("XLM", "USDC") — the server
+// disambiguates against the curated list. For ambiguous codes
+// (multiple issuers using "AQUA"), prefer the canonical
+// asset_id form (`AQUA-GBNZ...`) for an exact match. 404 when
+// the slug doesn't match.
+func ExampleClient_Coin() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"slug": "XLM",
+				"asset_id": "native",
+				"code": "XLM",
+				"first_seen_ledger": 1,
+				"last_seen_ledger": 62500000,
+				"observation_count": 120000000,
+				"price_usd": "0.16475",
+				"volume_24h_usd": "125000.00",
+				"change_24h_pct": "+0.83",
+				"markets_count": 42
+			},
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Coin(context.Background(), "XLM")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	mkts := int64(0)
+	if got.Data.MarketsCount != nil {
+		mkts = *got.Data.MarketsCount
+	}
+	fmt.Printf("%s ($%s, 24h=%s) trades on %d distinct markets\n",
+		got.Data.Code, *got.Data.PriceUSD, *got.Data.Change24hPct, mkts)
+
+	// Output: XLM ($0.16475, 24h=+0.83) trades on 42 distinct markets
+}
+
+// ExampleClient_Pair demonstrates a single-pair lookup — every
+// market the deployment has observed for one (base, quote) tuple,
+// each row attributed to a specific source. Returns a slice of
+// `Market` rows even when only one source has data, so the
+// caller doesn't branch on "1 vs many sources" / "0 vs 404"
+// (the empty array is the canonical "no such pair" signal).
+//
+// Useful for the explorer's `/markets/<base>~<quote>` detail page
+// and for "which venues quote XLM/USDC" UIs.
+func ExampleClient_Pair() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"base":"native","quote":"fiat:USD","last_trade_at":"2026-05-10T12:00:00Z",
+				 "trade_count_24h":5400,"volume_24h_usd":"45000.00"},
+				{"base":"native","quote":"fiat:USD","last_trade_at":"2026-05-10T11:59:55Z",
+				 "trade_count_24h":7200,"volume_24h_usd":"53000.50"}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Pair(context.Background(), "native", "fiat:USD")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	totalTrades := int64(0)
+	for _, m := range got.Data {
+		totalTrades += m.TradeCount24h
+	}
+	fmt.Printf("XLM/USD: %d sources, %d trades in last 24h\n",
+		len(got.Data), totalTrades)
+
+	// Output: XLM/USD: 2 sources, 12600 trades in last 24h
+}
+
+// ExampleClient_PriceTip demonstrates the fastest-feed tip endpoint.
+// Trades off cross-region byte-identical consistency (which
+// `/v1/price` provides via the closed-bucket VWAP) for lower
+// latency — most callers driving live UIs want this. The
+// `?window_seconds=` knob picks how recent a sample to consider
+// "fresh"; default 30 s matches the Freighter freshness target.
+func ExampleClient_PriceTip() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"asset_id": "native",
+				"quote": "fiat:USD",
+				"price": "0.16475",
+				"price_type": "tip",
+				"observed_at": "2026-05-10T12:00:42Z",
+				"window_seconds": 30
+			},
+			"as_of": "2026-05-10T12:00:42Z",
+			"sources": ["binance"],
+			"flags": {"stale": false}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	resp, err := c.PriceTip(context.Background(), client.PriceTipQuery{
+		Asset:         "native",
+		Quote:         "fiat:USD",
+		WindowSeconds: 30,
+	})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Printf("XLM/USD tip: %s (window: %ds)\n",
+		resp.Data.Price, resp.Data.WindowSeconds)
+
+	// Output: XLM/USD tip: 0.16475 (window: 30s)
+}
+
+// ExampleClient_Sources demonstrates listing the source registry —
+// every venue / oracle / aggregator the deployment can ingest from.
+// Class drives "include in VWAP" semantics: only `exchange` rows
+// contribute by default; aggregators and oracles are reported
+// alongside but excluded from the canonical VWAP (mixing them would
+// double-count upstream markets or impose their methodology on
+// our output).
+func ExampleClient_Sources() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"name":"binance","class":"exchange","subclass":"cex",
+				 "include_in_vwap":true,"backfill_available":true,"backfill_safe":true,"default_weight":100},
+				{"name":"soroswap","class":"exchange","subclass":"dex",
+				 "include_in_vwap":true,"backfill_available":true,"backfill_safe":true,"default_weight":100},
+				{"name":"reflector-dex","class":"oracle",
+				 "include_in_vwap":false,"backfill_available":true,"backfill_safe":true,"default_weight":100}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Sources(context.Background(), client.SourcesOptions{})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, s := range got.Data {
+		// Only `exchange` class contributes to VWAP per project policy.
+		fmt.Printf("%-15s class=%-10s vwap=%v\n", s.Name, s.Class, s.IncludeInVWAP)
+	}
+
+	// Output:
+	// binance         class=exchange   vwap=true
+	// soroswap        class=exchange   vwap=true
+	// reflector-dex   class=oracle     vwap=false
+}
+
+// ExampleClient_Markets demonstrates listing every (base, quote)
+// pair the deployment has observed at least one trade for, sorted
+// by 24h USD volume descending. Useful for "top markets" UIs and
+// for picking pairs to chart.
+//
+// Server-side limits: Limit ≤ 500. Larger requests return 400.
+func ExampleClient_Markets() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"base":"native","quote":"crypto:BTC",
+				 "last_trade_at":"2026-05-10T12:00:00Z","trade_count_24h":4827,"volume_24h_usd":"125000.00"},
+				{"base":"native","quote":"fiat:USD",
+				 "last_trade_at":"2026-05-10T11:59:50Z","trade_count_24h":12345,"volume_24h_usd":"98000.50"}
+			],
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	got, err := c.Markets(context.Background(), client.MarketsOptions{
+		Limit:   25,
+		OrderBy: client.MarketsOrderByVolume24hUSDDesc,
+	})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, m := range got.Data {
+		vol := "—"
+		if m.Volume24hUSD != nil {
+			vol = "$" + *m.Volume24hUSD
+		}
+		fmt.Printf("%s/%s: vol_24h=%s trades_24h=%d\n",
+			m.Base, m.Quote, vol, m.TradeCount24h)
+	}
+
+	// Output:
+	// native/crypto:BTC: vol_24h=$125000.00 trades_24h=4827
+	// native/fiat:USD: vol_24h=$98000.50 trades_24h=12345
+}
+
+// ExampleClient_OHLC demonstrates fetching one OHLC bar over an
+// arbitrary range. Server aggregates trades in [from, to) into a
+// single bar — pass a 1-hour range for a 1-hour bar, a 1-day
+// range for a daily bar, etc. For multi-bar series, call
+// repeatedly with adjacent windows or use `/v1/chart` (which
+// returns a series in one request).
+//
+// Truncated=true means the bar covers a window that hit the
+// per-bar trade-count cap — high-volume pairs over long windows
+// are the typical trigger. Treat truncated bars as a hint to
+// narrow the range.
+func ExampleClient_OHLC() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"from": "2026-05-10T11:00:00Z",
+				"to":   "2026-05-10T12:00:00Z",
+				"open":  "0.16412",
+				"high":  "0.16498",
+				"low":   "0.16387",
+				"close": "0.16475",
+				"base_volume":  "85432.10",
+				"quote_volume": "14082.41",
+				"trade_count":  217,
+				"truncated":    false
+			},
+			"as_of": "2026-05-10T12:00:00Z",
+			"flags": {}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := client.New(client.Options{BaseURL: srv.URL})
+	from := time.Date(2026, 5, 10, 11, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	got, err := c.OHLC(context.Background(), client.OHLCQuery{
+		Base:  "native",
+		Quote: "fiat:USD",
+		From:  from,
+		To:    to,
+	})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	bar := got.Data
+	fmt.Printf("o=%s h=%s l=%s c=%s vol=%s trades=%d\n",
+		bar.Open, bar.High, bar.Low, bar.Close, bar.BaseVolume, bar.TradeCount)
+
+	// Output: o=0.16412 h=0.16498 l=0.16387 c=0.16475 vol=85432.10 trades=217
+}

@@ -15,6 +15,8 @@ against.
 
 ## [Unreleased]
 
+## [v0.5.0-rc.39] — 2026-05-10
+
 ### Fixed
 
 - **`/v1/changes/coin/{id}` accepts friendly slugs alongside the
@@ -99,6 +101,33 @@ against.
 
 ### Added
 
+- **SDK godoc examples for `PriceTip`, `Sources`, `Markets`,
+  `OHLC`** (`pkg/client/example_test.go`). Each is a runnable
+  example with canned httptest server response + asserted
+  `// Output:` comment so the doc is verified at build time and
+  surfaced in pkg.go.dev. Picks the four most-likely-to-be-used
+  methods after `Price` / `Asset` (already had examples) — the
+  PriceTip / OHLC pair backs every "live UI" use case, while
+  Markets / Sources back the catalogue / source-attribution
+  surfaces.
+- **SDK godoc examples for `PriceBatch`, `Coins`, `Coin`, `Pair`**
+  (`pkg/client/example_test.go`). Round 2 of the godoc-coverage
+  push — picks the next four highest-traffic methods that lacked
+  examples on pkg.go.dev. PriceBatch (the recommended bulk path
+  per the Freighter RFP), Coins + Coin (what powers the
+  explorer's `/assets` and `/assets/<slug>` pages), and Pair
+  (per-source attribution for one market). Each example follows
+  the established httptest + `// Output:` pattern so it's
+  verified at build time.
+- **SDK godoc examples for `Issuers`, `Issuer`, `AssetMetadata`,
+  `History`, `Currency`, `Cursors`** (`pkg/client/example_test.go`).
+  Round 3 of the godoc-coverage push — closes the gap on the
+  remaining customer-facing methods. Together with the prior two
+  rounds, the SDK now has runnable examples for every Client
+  method a typical integration would touch in week one (catalogue
+  + pricing + history + diagnostics surfaces). Each example uses
+  the established httptest + asserted `// Output:` pattern so it
+  surfaces in pkg.go.dev AND verifies at build time.
 - **Explorer redirects for `/incidents`, `/converter`,
   `/oracles/<name>`** (404-audit follow-up, 2026-05-10).
   `/incidents` and `/incident/<slug>` now bounce to
