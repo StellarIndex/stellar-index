@@ -17,6 +17,15 @@ against.
 
 ### Added
 
+- **SDK godoc examples for `Issuers`, `Issuer`, `AssetMetadata`,
+  `History`, `Currency`, `Cursors`** (`pkg/client/example_test.go`).
+  Round 3 of the godoc-coverage push — closes the gap on the
+  remaining customer-facing methods. Together with the prior two
+  rounds, the SDK now has runnable examples for every Client
+  method a typical integration would touch in week one (catalogue
+  + pricing + history + diagnostics surfaces). Each example uses
+  the established httptest + asserted `// Output:` pattern so it
+  surfaces in pkg.go.dev AND verifies at build time.
 - **`/v1/pools?asset=<asset_id>` filter** — restrict the pools
   listing to rows where the asset appears on either side (base
   OR quote). Mirrors the same filter shape just shipped on
