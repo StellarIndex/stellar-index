@@ -17,6 +17,21 @@ against.
 
 ### Added
 
+- **Seed `configs/example.toml` documents Chainlink crypto +
+  FX feeds + the "must overlap with aggregator pairs" gotcha**.
+  Audit on 2026-05-10 found r1's Chainlink feeds were
+  configured only for fiat:EUR/GBP/JPY × USD — pairs the
+  aggregator's default coverage doesn't compute, so the
+  divergence worker had no overlap to cross-check and
+  `divergence_observations` was silently empty. The seed
+  config previously documented only the fiat:EUR/fiat:USD
+  example, leading every fresh operator down the same path.
+  Now documents the matching crypto-pair feed addresses
+  (BTC/USD, ETH/USD, LINK/USD) that align with the
+  aggregator's built-in default — so a stock deployment
+  populates divergence_observations out of the box once the
+  operator copies the crypto-feed block. Operator action
+  needed on r1 to add the crypto feeds (tracked).
 - **`/v1/pools?asset=<asset_id>` filter** — restrict the pools
   listing to rows where the asset appears on either side (base
   OR quote). Mirrors the same filter shape just shipped on
